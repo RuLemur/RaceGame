@@ -1,9 +1,19 @@
+import signal
+import sys
+
 import pygame
 import math
 from shapely.geometry import LineString
+import neat
+import os
+from shapely.geometry import LineString
+import time
+import pickle
 
 from pygame import Surface
 from shapely.geometry.base import BaseGeometry
+
+CHECKPOINT_DIR = 'checkpoints'
 
 # Инициализация Pygame
 pygame.init()
@@ -30,6 +40,7 @@ SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 800
 FPS = 60
 CAR_WIDTH, CAR_HEIGHT = 65, 30
 WHITE = (255, 255, 255)
+TIMEOUT = 10
 
 # Настройка окна
 win = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -38,6 +49,8 @@ pygame.display.set_caption("Car Racing")
 # Загрузка изображений
 car_image = pygame.image.load("./assets/car.png")
 car_image = pygame.transform.scale(car_image, (CAR_WIDTH, CAR_HEIGHT))
+
+font = pygame.font.Font('freesansbold.ttf', 20)
 
 
 # Функция для вычисления конечной точки
@@ -110,60 +123,175 @@ def check_collision(car_rect, track_lines):
     return False
 
 
-# Создание машины
-car = Car(130, 500)
-font = pygame.font.Font('freesansbold.ttf', 32)
+def draw_line(car, angle: int):
+    car_position = (car.x, car.y)
+    line_end_pos = calculate_end_pos(car_position, -car.angle + angle, 500)
+    pygame.draw.line(win, WHITE, car_position, line_end_pos, 1)
+    m_line = LineString([car_position, line_end_pos])
+    return m_line
 
-# Основной цикл
-clock = pygame.time.Clock()
-running = True
-while running:
-    clock.tick(FPS)
-    # print(clock.get_fps())
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+
+def draw_intersaction(m_line, inters, y_text_pos):
+    if not inters.is_empty:
+        # Вычисляем расстояние до точки пересечения от начала основной линии
+        distance = m_line.project(inters)
+        d_text = font.render(f"{distance:.2f}", True, WHITE, BLACK)
+        win.blit(d_text, (10, y_text_pos))
+        pygame.draw.circle(win, WHITE, inters.coords[0], 5)
+
+generation: int = 1
+def eval_genomes(genomes, config):
+    global generation
+    for genome_id, genome in genomes:
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        genome.fitness = run_game_with_network(net, generation, genome_id)
+        print(f"Generation {generation}. Genome {genome_id} fitness: {genome.fitness:.2f}")
+    save_checkpoint(p, generation)
+    generation += 1
+    print(f"Generation {generation} complete.")
+
+
+
+def run_game_with_network(network, generation_id, genome_id):
+    # Создание машины
+    car = Car(130, 500)
+    fitness = 0
+    clock = pygame.time.Clock()
+    running = True
+    start_time = time.time()
+
+    while running:
+        fitness -= 0.001
+        clock.tick(FPS)
+        win.fill(BLACK)
+
+        # Проверка на тайм-аут
+        elapsed_time = time.time() - start_time
+        if elapsed_time > TIMEOUT:
+            print(f"Timeout reached: {elapsed_time:.2f} seconds")
+            break
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+        # Получение входных данных для нейросети
+        inputs = get_inputs_for_network(car)
+
+        # Получение выходных данных от нейросети
+        output = network.activate(inputs)
+
+        # Используем выходы сети для управления автомобилем
+        if output[0] > 0.5:
+            car.angle -= 5 * (1 - GRIP * car.speed / car.mass)
+        if output[1] > 0.5:
+            car.angle += 5 * (1 - GRIP * car.speed / car.mass)
+        if output[2] > 0.5:
+            car.speed += FORCE / car.mass
+        elif output[3] > 0.5:
+            car.speed -= FORCE / car.mass
+        else:
+            if car.speed > 0:
+                car.speed -= DECELERATION / car.mass
+            elif car.speed < 0:
+                car.speed += DECELERATION / car.mass
+
+        # Обновление машины
+        car.update()
+
+        pygame.draw.lines(win, TRACK_COLOR, True, TRACK, 3)
+        pygame.draw.lines(win, TRACK_COLOR, True, TRACK2, 3)
+
+        d_text = font.render(f"{fitness:.2f}", True, WHITE, BLACK)
+        win.blit(d_text, (10, 10))
+
+        d_text = font.render(f"Generation: {generation_id}", True, WHITE, BLACK)
+        win.blit(d_text, (1000, 50))
+        d_text = font.render(f"Genome: {genome_id}", True, WHITE, BLACK)
+        win.blit(d_text, (1000, 10))
+
+        # Проверка столкновений
+        car_rect = pygame.Rect(car.x - CAR_WIDTH // 2, car.y - CAR_HEIGHT // 2, CAR_WIDTH, CAR_HEIGHT)
+        if check_collision(car_rect, TRACK) or check_collision(car_rect, TRACK2):
+            print(f"Collision at position: ({car.x}, {car.y})")
+            fitness -= 10
             running = False
 
-    # Обновление машины
-    car.handle_keys()
-    car.update()
-
-    # Отрисовка трассы
-    win.fill(BLACK)
-    pygame.draw.lines(win, TRACK_COLOR, True, TRACK, 3)
-    pygame.draw.lines(win, TRACK_COLOR, True, TRACK2, 3)
-
-    for line in [TRACK, TRACK2]:
-        car_position = (car.x, car.y)
-        line_end_pos = calculate_end_pos(car_position, -car.angle, 500)
-        pygame.draw.line(win, WHITE, car_position, line_end_pos, 2)
-
-        main_line = LineString([car_position, line_end_pos])
-
-        # Проходим по сегментам линии
-        for i in range(len(line) - 1):
-            checked_line = LineString([line[i], line[i+1]])
-
-            # Проверяем пересечение
-            intersection = main_line.intersection(checked_line)
-            # Рисуем ближайшую точку пересечения
-            if not intersection.is_empty:
-                # Вычисляем расстояние до точки пересечения от начала основной линии
-                distance = main_line.project(intersection)
-                distanceText = font.render(f"{distance:.2f}", True, WHITE, BLACK)
-                win.blit(distanceText, (10, 10))
-                pygame.draw.circle(win, WHITE, intersection.coords[0], 5)
+        car.draw(win)
+        pygame.display.flip()
+        # Увеличение фитнесс-функции за каждую пройденную дистанцию
+        fitness += car.speed * 1.5
 
 
-    # Проверка на столкновение с трассой
-    car_rect = pygame.Rect(car.x - CAR_WIDTH // 2, car.y - CAR_HEIGHT // 2, CAR_WIDTH, CAR_HEIGHT)
-    if check_collision(car_rect, TRACK) or check_collision(car_rect, TRACK2):
-        # Перезапуск игры
-        car = Car(130, 500)  # Сброс машины на начальную позицию
+    return fitness
 
-    # Отрисовка машины
-    car.draw(win)
 
-    pygame.display.flip()
+def get_inputs_for_network(car):
+    # Пример: используем расстояния до ближайших препятствий как входы
+    distances = []
+    for angle in [0, 30, -30, 90, -90, 140, -140]:
+        main_line = draw_line(car, angle)
+        distance = float('inf')
+        for line in [TRACK, TRACK2]:
+            for i in range(len(line) - 1):
+                checked_line = LineString([line[i], line[i + 1]])
+                intersection = main_line.intersection(checked_line)
+                if not intersection.is_empty:
+                    distance = min(distance, main_line.project(intersection))
+                    pygame.draw.circle(win, WHITE, intersection.coords[0], 5)
+        distances.append(distance)
 
-pygame.quit()
+    return distances
+
+def save_checkpoint(population, generation):
+    filename = os.path.join(CHECKPOINT_DIR, f'neat-checkpoint-gen-{generation}.pkl')
+    with open(filename, 'wb') as f:
+        pickle.dump(population, f)
+    print(f"Checkpoint saved to {filename}")
+
+def load_checkpoint(filename):
+    with open(filename, 'rb') as f:
+        population = pickle.load(f)
+    print(f"Checkpoint loaded from {filename}")
+    return population
+
+def signal_handler(sig, frame):
+    print('Interrupt received, saving latest checkpoint...')
+    save_checkpoint(p, str(generation))
+    sys.exit(0)
+
+if __name__ == "__main__":
+    if not os.path.exists(CHECKPOINT_DIR):
+        os.makedirs(CHECKPOINT_DIR)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    config_path = os.path.join(os.path.dirname(__file__), "config-feedforward.txt")
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                                config_path)
+
+    # Пытаемся загрузить последнюю контрольную точку
+    latest_checkpoint = None
+    if os.path.exists(CHECKPOINT_DIR):
+        checkpoints = [f for f in os.listdir(CHECKPOINT_DIR) if f.endswith('.pkl')]
+        if checkpoints:
+            latest_checkpoint = max(checkpoints, key=lambda f: int(f.split('-')[3].split('.')[0]))
+            generation = int(latest_checkpoint.split('-')[3].split('.')[0])
+
+    p = load_checkpoint(os.path.join(CHECKPOINT_DIR, latest_checkpoint)) if latest_checkpoint else neat.Population(
+        config)
+
+
+    # Добавление репортеров
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+
+    # Запуск обучения
+    try:
+        winner = p.run(eval_genomes, 100)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        save_checkpoint(p, 'error')
+        raise
