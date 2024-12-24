@@ -2,7 +2,7 @@
 # критерий фитнеса
 fitness_criterion     = max
 # пороговое значение фитнеса для завершения обучения
-fitness_threshold     = 10000
+fitness_threshold     = 100000
 # размер популяции
 pop_size              = 50
 # сброс популяции при вымирании всех видов
@@ -75,6 +75,6 @@ species_fitness_func  = max
 
 [DefaultReproduction]
 # количество элитных особей, которые будут перенесены в следующее поколение
-elitism               = 10
+elitism               = 15
 # порог выживания
-survival_threshold    = 0.1
+survival_threshold    = 0.3
