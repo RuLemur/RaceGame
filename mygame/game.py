@@ -13,50 +13,62 @@ import pickle
 from pygame import Surface
 from shapely.geometry.base import BaseGeometry
 
-CHECKPOINT_DIR = 'checkpoints'
+from mygame.car import Car
+from mygame.constants import SCREEN_WIDTH, SCREEN_HEIGHT, CAR_WIDTH, CAR_HEIGHT, NEURON_RADIUS, WHITE, BLACK, TIMEOUT, \
+    FPS, GRIP, FORCE, DECELERATION, TRACK_COLOR, TRACK, TRACK2, CHECKPOINTS, START_LINE, RED, CHECKPOINT_DIR, VIS_X, \
+    VIS_Y, VIS_HEIGHT, VIS_WIDTH
 
 # Инициализация Pygame
 pygame.init()
-
-# трасса
-TRACK_COLOR = (50, 50, 50)
-TRACK = [[95, 114], [237, 64], [385, 48], [532, 86], [613, 100], [756, 85], [891, 75], [1081, 51], [1141, 144],
-         [1134, 237], [1089, 315], [1035, 400], [967, 409], [871, 430], [819, 457], [869, 533], [938, 622], [918, 694],
-         [722, 740], [556, 742], [450, 748], [421, 654], [331, 623], [215, 618], [172, 665], [97, 683], [57, 572],
-         [79, 390], [63, 300], [47, 222], [96, 114]]
-TRACK2 = [[298, 190], [408, 197], [486, 249], [570, 287], [692, 254], [849, 222], [920, 226], [924, 243], [892, 303],
-          [808, 330], [737, 358], [714, 401], [667, 440], [669, 506], [689, 559], [746, 601], [635, 619], [565, 600],
-          [497, 551], [473, 502], [389, 478], [284, 477], [229, 481], [179, 415], [202, 312], [201, 215]]
-
-START_LINE = ([45, 456], [226, 456])
-
-CHECKPOINTS = [([95, 83], [246, 231]), ([513, 64], [464, 272]), ([829, 83], [843, 243]), ([879, 278], [1027, 416]),
-               ([919, 545], [688, 584]), ([603, 585], [544, 774])]
-
-# Константы
-FORCE = 0.5  # Сила для ускорения
-MAX_SPEED = 9
-MAX_SPEED_REVERS = 3
-DECELERATION = 0.05
-GRIP = 0.01  # Коэффициент сцепления для дрифта
-DRIFT_FACTOR = 0.2  # Коэффициент дрифта
-BLACK = (0, 0, 0)
-SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 800
-FPS = 60
-CAR_WIDTH, CAR_HEIGHT = 65, 30
-WHITE = (255, 255, 255)
-RED = (200, 0, 0)
-TIMEOUT = 10
 
 # Настройка окна
 win = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Car Racing")
 
-# Загрузка изображений
-car_image = pygame.image.load("./assets/car.png")
-car_image = pygame.transform.scale(car_image, (CAR_WIDTH, CAR_HEIGHT))
 
 font = pygame.font.Font('freesansbold.ttf', 20)
+
+
+def draw_network(win, genome, config):
+    # Очистка области визуализации
+    transparent_surface = pygame.Surface((VIS_WIDTH, VIS_HEIGHT), pygame.SRCALPHA)
+    transparent_surface.fill((160, 160, 160, 128))  # Полупрозрачный белый фон
+
+    # Получение информации о сети
+    net = neat.nn.FeedForwardNetwork.create(genome, config)
+
+    # Задайте координаты для слоев
+    layer_positions = []
+    input_nodes = config.genome_config.input_keys
+    output_nodes = config.genome_config.output_keys
+    hidden_nodes = list(set(genome.nodes.keys()) - set(input_nodes) - set(output_nodes))
+
+    # Вычисление позиций для каждого слоя
+    layer_positions.append(
+        [(VIS_X + 50, VIS_Y + VIS_HEIGHT // (len(input_nodes) + 1) * (i + 1)) for i in range(len(input_nodes))])
+    layer_positions.append([(VIS_X + VIS_WIDTH // 2, VIS_Y + VIS_HEIGHT // (len(hidden_nodes) + 1) * (i + 1)) for i in
+                            range(len(hidden_nodes))])
+    layer_positions.append([(VIS_X + VIS_WIDTH - 50, VIS_Y + VIS_HEIGHT // (len(output_nodes) + 1) * (i + 1)) for i in
+                            range(len(output_nodes))])
+
+    win.blit(transparent_surface, (VIS_X, VIS_Y))
+    # Отображение соединений
+    for conn_key, conn in genome.connections.items():
+        if conn.enabled:
+            in_node, out_node = conn_key
+            start_pos = layer_positions[0][input_nodes.index(in_node)] if in_node in input_nodes else \
+            layer_positions[1][hidden_nodes.index(in_node)]
+            end_pos = layer_positions[2][output_nodes.index(out_node)] if out_node in output_nodes else \
+            layer_positions[1][hidden_nodes.index(out_node)]
+            pygame.draw.line(win, (0, 0, 0), start_pos, end_pos, 1 if conn.weight < 0 else 2)
+
+    # Отображение нейронов
+    for layer in layer_positions:
+        for pos in layer:
+            pygame.draw.circle(win, (0, 0, 255), pos, NEURON_RADIUS)
+
+
+    pygame.display.update()
 
 
 # Функция для вычисления конечной точки
@@ -65,59 +77,6 @@ def calculate_end_pos(start_pos, angle_degrees, length):
     end_x = start_pos[0] + length * math.cos(angle_radians)
     end_y = start_pos[1] - length * math.sin(angle_radians)  # Минус, потому что ось Y направлена вниз
     return int(end_x), int(end_y)
-
-
-class Car:
-    def __init__(self, x, y, mass=1.0):
-        self.x = x
-        self.y = y
-        self.angle = 270
-        self.speed = 0
-        self.mass = mass
-        self.drift = 0
-
-    def draw(self, win):
-        # car_position = (self.x, self.y)
-        rotated_image = pygame.transform.rotate(car_image, -self.angle - self.drift)
-        new_rect = rotated_image.get_rect(center=(self.x, self.y))
-        win.blit(rotated_image, new_rect.topleft)
-
-    def update(self):
-        rad = math.radians(self.angle + self.drift)
-        self.x += self.speed * math.cos(rad)
-        self.y += self.speed * math.sin(rad)
-
-        # Плавное возвращение из дрифта
-        self.drift *= 0.9
-
-    def handle_keys(self):
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT] and self.speed != 0:
-            # Увеличиваем дрифт при повороте
-            self.angle -= 5 * (1 - GRIP * self.speed / self.mass)
-            # self.drift -= DRIFT_FACTOR * self.speed / MAX_SPEED
-        if keys[pygame.K_RIGHT] and self.speed != 0:
-            self.angle += 5 * (1 - GRIP * self.speed / self.mass)
-            # self.drift += DRIFT_FACTOR * self.speed / MAX_SPEED
-        if keys[pygame.K_UP]:
-            self.speed += FORCE / self.mass
-        elif keys[pygame.K_DOWN]:
-            self.speed -= FORCE / self.mass
-        else:
-            # Замедление, когда нет нажатия клавиш
-            if self.speed > 0:
-                self.speed -= DECELERATION / self.mass
-            elif self.speed < 0:
-                self.speed += DECELERATION / self.mass
-
-        # Ограничиваем скорость
-        if self.speed > MAX_SPEED:
-            self.speed = MAX_SPEED
-        elif self.speed < -MAX_SPEED_REVERS:
-            self.speed = -MAX_SPEED_REVERS
-
-        # Устанавливаем скорость в 0, если она очень мала
-        if abs(self.speed) < DECELERATION / self.mass:            self.speed = 0
 
 
 def check_collision(car_rect, track_lines):
@@ -268,9 +227,12 @@ def run_game_with_network(network, generation_id, genome_id):
             fitness += 5000
 
         car.draw(win)
+        genome = list(p.population.values())[0]
+        draw_network(win, genome, config)
         pygame.display.flip()
         # Увеличение фитнесс-функции за каждую пройденную дистанцию
         fitness += car.speed * 0.05
+
 
     return fitness
 
