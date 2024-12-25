@@ -27,9 +27,11 @@ pygame.display.set_caption("Car Racing")
 
 font = pygame.font.Font('freesansbold.ttf', 20)
 
+
 def print_text(w, text: str, coords):
     d_text = font.render(text, True, WHITE, BLACK)
     w.blit(d_text, coords)
+
 
 def draw_network(win, genome, config):
     # Очистка области визуализации
@@ -135,7 +137,6 @@ max_crossed_lines = 0
 
 
 def run_game_with_network(network, generation_id, genome_id):
-    # Создание машины
     crossed_lines = 0
     already_crossed = []
 
@@ -143,6 +144,7 @@ def run_game_with_network(network, generation_id, genome_id):
     fitness = 0
     clock = pygame.time.Clock()
     running = True
+
     start_time = time.time()
     timeout = TIMEOUT
     while running:
@@ -154,8 +156,8 @@ def run_game_with_network(network, generation_id, genome_id):
         win.fill(BLACK)
 
         # Проверка на тайм-аут
-        elapsed_time = time.time() - start_time
-        if elapsed_time > timeout:
+        elapsed_time = timeout - (time.time() - start_time)
+        if elapsed_time == 0:
             print(f"Timeout reached: {elapsed_time:.2f} seconds")
             break
 
@@ -173,13 +175,13 @@ def run_game_with_network(network, generation_id, genome_id):
         output = network.activate(inputs)
 
         # Используем выходы сети для управления автомобилем
-        if output[0] > 0.5: # left
+        if output[0] > 0.5:  # left
             car.angle -= 5 * (1 - GRIP * car.speed / car.mass)
-        if output[0] < -0.5: # right
+        if output[0] < -0.5:  # right
             car.angle += 5 * (1 - GRIP * car.speed / car.mass)
-        if output[1] > 0.5: # throttle
+        if output[1] > 0.5:  # throttle
             car.speed += FORCE / car.mass
-        elif output[1] < -0.5: # brake
+        elif output[1] < -0.5:  # brake
             if (car.speed - FORCE / car.mass) > 0:
                 car.speed -= FORCE / car.mass
         else:
@@ -202,8 +204,8 @@ def run_game_with_network(network, generation_id, genome_id):
         print_text(win, f"Genome: {genome_id}", (1000, 10))
         print_text(win, f"Generation: {generation_id}", (1000, 40))
         print_text(win, f"Crossed lines: {crossed_lines}", (1000, 70))
-        print_text(win, f"Max fitness: {max_fitness:.2f}", (1000, 100))
-        print_text(win, f"Max CL: {max_crossed_lines}", (1000, 130))
+        print_text(win, f"Max fitness: {max_fitness:.2f}", (1000, 120))
+        print_text(win, f"Max CL: {max_crossed_lines}", (1000, 150))
 
         # Проверка столкновений
         car_rect = pygame.Rect(car.x - CAR_WIDTH // 2, car.y - CAR_HEIGHT // 2, CAR_WIDTH, CAR_HEIGHT)
@@ -245,7 +247,6 @@ def get_inputs_for_network(car):
                     distance = min(distance, main_line.project(intersection))
                     pygame.draw.circle(win, WHITE, intersection.coords[0], 5)
         inputs.append(distance)
-
 
     return inputs
 
