@@ -15,7 +15,7 @@ from shapely.geometry.base import BaseGeometry
 
 from mygame.car import Car
 from mygame.constants import SCREEN_WIDTH, SCREEN_HEIGHT, CAR_WIDTH, CAR_HEIGHT, NEURON_RADIUS, WHITE, BLACK, TIMEOUT, \
-    FPS, GRIP, FORCE, DECELERATION, TRACK_COLOR, TRACK, TRACK2, CHECKPOINTS, START_LINE, RED, CHECKPOINT_DIR, VIS_X, \
+    FPS, GRIP, FORCE, DECELERATION, TRACK_COLOR, RED, CHECKPOINT_DIR, VIS_X, \
     VIS_Y, VIS_HEIGHT, VIS_WIDTH
 
 # Инициализация Pygame
@@ -26,6 +26,41 @@ win = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Car Racing")
 
 font = pygame.font.Font('freesansbold.ttf', 20)
+
+def parse_track(filename):
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+
+        # Удаляем символы новой строки и пробелы
+    lines = [line.strip() for line in lines if line.strip()]
+
+    # Остальные строки
+    other_lines = []
+    for line in lines[2:]:
+        # Преобразуем строку в список кортежей
+        points = eval(line)
+        tuple_points = (points[0], points[1])
+        other_lines.append(tuple_points)
+
+    return eval(lines[0]), eval(lines[1]), other_lines[:-1], other_lines[len(other_lines) - 1]
+
+
+track_outer, track_inner, checkpoints_lines, start_line = parse_track("points.txt")
+
+
+def print_x(w, coords):
+    cross_length = 20
+
+    pos_x, pos_y = coords
+    # Координаты концов линий крестика
+    left_top = (pos_x - cross_length, pos_y - cross_length)
+    right_bottom = (pos_x + cross_length, pos_y + cross_length)
+    right_top = (pos_x + cross_length, pos_y - cross_length)
+    left_bottom = (pos_x - cross_length, pos_y + cross_length)
+
+    # Рисование линий крестика
+    pygame.draw.line(w, RED, left_top, right_bottom, 5)
+    pygame.draw.line(w, RED, right_top, left_bottom, 5)
 
 
 def print_text(w, text: str, coords):
@@ -125,7 +160,7 @@ def eval_genomes(genomes, config):
     global generation
     for genome_id, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
-        genome.fitness = run_game_with_network(net, generation, genome_id)
+        genome.fitness = run_game_with_network(net, generation, genome, genome_id)
         print(f"Generation {generation}. Genome {genome_id} fitness: {genome.fitness:.2f}")
     save_checkpoint(p, generation)
     generation += 1
@@ -135,8 +170,10 @@ def eval_genomes(genomes, config):
 max_fitness = 0
 max_crossed_lines = 0
 
+last_collistion = None
 
-def run_game_with_network(network, generation_id, genome_id):
+
+def run_game_with_network(network, generation_id, genome, genome_id):
     crossed_lines = 0
     already_crossed = []
 
@@ -157,7 +194,7 @@ def run_game_with_network(network, generation_id, genome_id):
 
         # Проверка на тайм-аут
         elapsed_time = timeout - (time.time() - start_time)
-        if elapsed_time == 0:
+        if elapsed_time <= 0:
             print(f"Timeout reached: {elapsed_time:.2f} seconds")
             break
 
@@ -191,12 +228,12 @@ def run_game_with_network(network, generation_id, genome_id):
         # Обновление машины
         car.update()
 
-        pygame.draw.lines(win, TRACK_COLOR, True, TRACK, 3)
-        pygame.draw.lines(win, TRACK_COLOR, True, TRACK2, 3)
+        pygame.draw.lines(win, TRACK_COLOR, True, track_outer, 3)
+        pygame.draw.lines(win, TRACK_COLOR, True, track_inner, 3)
 
-        for start_ch_line, end_ch_line in CHECKPOINTS:
+        for start_ch_line, end_ch_line in checkpoints_lines:
             pygame.draw.line(win, RED, start_ch_line, end_ch_line, 3)
-        pygame.draw.line(win, (255, 255, 255), START_LINE[0], START_LINE[1], 5)
+        pygame.draw.line(win, (255, 255, 255), start_line[0], start_line[1], 5)
 
         print_text(win, f"Fitness: {fitness:.2f}", (10, 10))
         print_text(win, f"Time: {elapsed_time:.2f}", (10, 40))
@@ -208,23 +245,29 @@ def run_game_with_network(network, generation_id, genome_id):
         print_text(win, f"Max fitness: {max_fitness:.2f}", (1000, 740))
         print_text(win, f"Max CL: {max_crossed_lines}", (1000, 770))
 
+        global last_collistion
+        if last_collistion is not None:
+            print_x(win, last_collistion)
+
         # Проверка столкновений
         car_rect = pygame.Rect(car.x - CAR_WIDTH // 2, car.y - CAR_HEIGHT // 2, CAR_WIDTH, CAR_HEIGHT)
-        if check_collision(car_rect, TRACK) or check_collision(car_rect, TRACK2):
+        if check_collision(car_rect, track_outer) or check_collision(car_rect, track_inner):
             print(f"Collision at position: ({car.x}, {car.y})")
             crossed_lines = 0
             running = False
-        if check_collision_by_line(car_rect, CHECKPOINTS, already_crossed):
+            last_collistion = (car.x, car.y)
+        if check_collision_by_line(car_rect, checkpoints_lines, already_crossed):
             print(f"Reached checkpoints: ({car.x}, {car.y})")
             crossed_lines += 1
             fitness += 1000 * crossed_lines
             timeout += 10
-        if check_collision_by_line(car_rect, [START_LINE],
-                                   already_crossed) and crossed_lines > 0 and crossed_lines % len(CHECKPOINTS) == 0:
+        if check_collision_by_line(car_rect, [start_line],
+                                   already_crossed) and crossed_lines > 0 and crossed_lines % len(checkpoints_lines) == 0:
             print(f"Reached START LINE: ({car.x}, {car.y})")
             fitness += 5000 * len(crossed_lines)
 
         car.draw(win)
+
         # draw_network(win, genome, config)
         pygame.display.flip()
         # Увеличение фитнесс-функции за каждую пройденную дистанцию
@@ -240,7 +283,7 @@ def get_inputs_for_network(car):
     for angle in [-150, -90, -45, 0, 45, 90, 150]:
         main_line = draw_line(car, angle)
         distance = float('inf')
-        for line in [TRACK, TRACK2]:
+        for line in [track_outer, track_inner]:
             for i in range(len(line) - 1):
                 checked_line = LineString([line[i], line[i + 1]])
                 intersection = main_line.intersection(checked_line)
@@ -304,5 +347,5 @@ if __name__ == "__main__":
         winner = p.run(eval_genomes, 1000)
     except Exception as e:
         print(f"An error occurred: {e}")
-        save_checkpoint(p, 'error')
+        # save_checkpoint(p, 'error')
         raise
