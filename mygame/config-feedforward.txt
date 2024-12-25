@@ -4,20 +4,20 @@ fitness_criterion     = max
 # пороговое значение фитнеса для завершения обучения
 fitness_threshold     = 100000
 # размер популяции
-pop_size              = 50
+pop_size              = 100
 # сброс популяции при вымирании всех видов
 reset_on_extinction   = false
 
 [DefaultGenome]
 # количество входов и выходов сети
-num_inputs            = 7
+num_inputs            = 9
 num_outputs           = 4
 # количество скрытых нейронов
-num_hidden            = 0
+num_hidden            = 2
 # начальные соединения
 initial_connection    = full
 # активация функции
-activation_default    = sigmoid
+activation_default    = tanh
 activation_mutate_rate  = 0.1
 activation_options    = sigmoid
 # функция объединения
@@ -30,7 +30,7 @@ weight_max_value        = 30
 weight_min_value        = -30
 weight_init_mean        = 0.0
 weight_init_stdev       = 1.0
-weight_mutate_rate      = 0.8
+weight_mutate_rate      = 0.5
 weight_replace_rate     = 0.1
 weight_mutate_power     = 0.5
 enabled_default         = True
@@ -65,16 +65,16 @@ response_min_value      = -30.0
 
 [DefaultSpeciesSet]
 # порог совместимости видов
-compatibility_threshold = 3.0
+compatibility_threshold = 1.5
 
 [DefaultStagnation]
 # максимальное количество поколений без улучшения фитнеса
-max_stagnation        = 30
+max_stagnation        = 50
 # функция фитнеса для видов
 species_fitness_func  = max
 
 [DefaultReproduction]
 # количество элитных особей, которые будут перенесены в следующее поколение
-elitism               = 15
+elitism               = 5
 # порог выживания
-survival_threshold    = 0.3
+survival_threshold    = 0.1

@@ -25,14 +25,13 @@ pygame.init()
 win = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Car Racing")
 
-
 font = pygame.font.Font('freesansbold.ttf', 20)
 
 
 def draw_network(win, genome, config):
     # Очистка области визуализации
     transparent_surface = pygame.Surface((VIS_WIDTH, VIS_HEIGHT), pygame.SRCALPHA)
-    transparent_surface.fill((160, 160, 160, 128))  # Полупрозрачный белый фон
+    transparent_surface.fill((160, 160, 160, 190))  # Полупрозрачный белый фон
 
     # Получение информации о сети
     net = neat.nn.FeedForwardNetwork.create(genome, config)
@@ -57,16 +56,16 @@ def draw_network(win, genome, config):
         if conn.enabled:
             in_node, out_node = conn_key
             start_pos = layer_positions[0][input_nodes.index(in_node)] if in_node in input_nodes else \
-            layer_positions[1][hidden_nodes.index(in_node)]
+                layer_positions[1][hidden_nodes.index(in_node)]
             end_pos = layer_positions[2][output_nodes.index(out_node)] if out_node in output_nodes else \
-            layer_positions[1][hidden_nodes.index(out_node)]
-            pygame.draw.line(win, (0, 0, 0), start_pos, end_pos, 1 if conn.weight < 0 else 2)
+                layer_positions[1][hidden_nodes.index(out_node)]
+            pygame.draw.line(win, (0, 0, 255) if conn.weight < 0 else (255, 0, 0), start_pos, end_pos,
+                             1 if conn.weight < 0 else 2)
 
     # Отображение нейронов
     for layer in layer_positions:
         for pos in layer:
-            pygame.draw.circle(win, (0, 0, 255), pos, NEURON_RADIUS)
-
+            pygame.draw.circle(win, (0, 255, 0), pos, NEURON_RADIUS)
 
     pygame.display.update()
 
@@ -121,7 +120,7 @@ def eval_genomes(genomes, config):
     global generation
     for genome_id, genome in genomes:
         net = neat.nn.FeedForwardNetwork.create(genome, config)
-        genome.fitness = run_game_with_network(net, generation, genome_id)
+        genome.fitness = run_game_with_network(net, generation, genome, genome_id)
         print(f"Generation {generation}. Genome {genome_id} fitness: {genome.fitness:.2f}")
     save_checkpoint(p, generation)
     generation += 1
@@ -132,7 +131,7 @@ max_fitness = 0
 max_crossed_lines = 0
 
 
-def run_game_with_network(network, generation_id, genome_id):
+def run_game_with_network(network, generation_id, genome, genome_id):
     # Создание машины
     crossed_lines = 0
     already_crossed = []
@@ -142,7 +141,7 @@ def run_game_with_network(network, generation_id, genome_id):
     clock = pygame.time.Clock()
     running = True
     start_time = time.time()
-
+    timeout = TIMEOUT
     while running:
         global max_fitness, max_crossed_lines
         max_fitness = max_fitness if max_fitness > fitness else fitness
@@ -154,7 +153,7 @@ def run_game_with_network(network, generation_id, genome_id):
 
         # Проверка на тайм-аут
         elapsed_time = time.time() - start_time
-        if elapsed_time > TIMEOUT:
+        if elapsed_time > timeout:
             print(f"Timeout reached: {elapsed_time:.2f} seconds")
             break
 
@@ -179,7 +178,8 @@ def run_game_with_network(network, generation_id, genome_id):
         if output[2] > 0.5:
             car.speed += FORCE / car.mass
         elif output[3] > 0.5:
-            car.speed -= FORCE / car.mass
+            if (car.speed - FORCE / car.mass) > 0:
+                car.speed -= FORCE / car.mass
         else:
             if car.speed > 0:
                 car.speed -= DECELERATION / car.mass
@@ -199,16 +199,18 @@ def run_game_with_network(network, generation_id, genome_id):
         d_text = font.render(f"{fitness:.2f}", True, WHITE, BLACK)
         win.blit(d_text, (10, 10))
 
+        d_text = font.render(f"Elapsed time: {elapsed_time:.2f}", True, WHITE, BLACK)
+        win.blit(d_text, (970, 750))
         d_text = font.render(f"Max CL: {max_crossed_lines}", True, WHITE, BLACK)
-        win.blit(d_text, (1000, 170))
+        win.blit(d_text, (970, 170))
         d_text = font.render(f"Max fitness: {max_fitness:.2f}", True, WHITE, BLACK)
-        win.blit(d_text, (1000, 130))
+        win.blit(d_text, (970, 130))
         d_text = font.render(f"Crossed lines: {crossed_lines}", True, WHITE, BLACK)
-        win.blit(d_text, (1000, 90))
+        win.blit(d_text, (970, 90))
         d_text = font.render(f"Generation: {generation_id}", True, WHITE, BLACK)
-        win.blit(d_text, (1000, 50))
+        win.blit(d_text, (970, 50))
         d_text = font.render(f"Genome: {genome_id}", True, WHITE, BLACK)
-        win.blit(d_text, (1000, 10))
+        win.blit(d_text, (970, 10))
 
         # Проверка столкновений
         car_rect = pygame.Rect(car.x - CAR_WIDTH // 2, car.y - CAR_HEIGHT // 2, CAR_WIDTH, CAR_HEIGHT)
@@ -220,27 +222,27 @@ def run_game_with_network(network, generation_id, genome_id):
         if check_collision_by_line(car_rect, CHECKPOINTS, already_crossed):
             print(f"Reached checkpoints: ({car.x}, {car.y})")
             crossed_lines += 1
-            fitness += 1000
+            fitness += 1000 * crossed_lines
+            timeout += 10
         if check_collision_by_line(car_rect, [START_LINE],
                                    already_crossed) and crossed_lines > 0 and crossed_lines % len(CHECKPOINTS) == 0:
             print(f"Reached START LINE: ({car.x}, {car.y})")
-            fitness += 5000
+            fitness += 5000 * len(crossed_lines)
 
         car.draw(win)
-        genome = list(p.population.values())[0]
-        draw_network(win, genome, config)
+        # draw_network(win, genome, config)
         pygame.display.flip()
         # Увеличение фитнесс-функции за каждую пройденную дистанцию
-        fitness += car.speed * 0.05
-
+        fitness += car.speed * 0.15
 
     return fitness
 
 
 def get_inputs_for_network(car):
     # Пример: используем расстояния до ближайших препятствий как входы
-    distances = []
-    for angle in [0, 30, -30, 90, -90, 140, -140]:
+    inputs = [car.angle, car.speed]
+
+    for angle in [-140, -90, -30, 0, 30, 90, 140]:
         main_line = draw_line(car, angle)
         distance = float('inf')
         for line in [TRACK, TRACK2]:
@@ -250,18 +252,10 @@ def get_inputs_for_network(car):
                 if not intersection.is_empty:
                     distance = min(distance, main_line.project(intersection))
                     pygame.draw.circle(win, WHITE, intersection.coords[0], 5)
-        distances.append(distance)
+        inputs.append(distance)
 
-        distance = float('inf')
-        for line in CHECKPOINTS:
-            l_start, l_end = line
-            checked_line = LineString([l_start, l_end])
-            intersection = main_line.intersection(checked_line)
-            if not intersection.is_empty:
-                distance = min(distance, main_line.project(intersection))
-                pygame.draw.circle(win, RED, intersection.coords[0], 5)
 
-    return distances
+    return inputs
 
 
 def save_checkpoint(population, generation):

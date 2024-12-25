@@ -1,18 +1,19 @@
 import math
 import pygame
 
-from mygame.constants import CAR_WIDTH, CAR_HEIGHT
+from mygame.constants import CAR_WIDTH, CAR_HEIGHT, FORCE, DECELERATION, MAX_SPEED, MAX_SPEED_REVERS
 
 # Загрузка изображений
 car_image = pygame.image.load("./assets/car.png")
 car_image = pygame.transform.scale(car_image, (CAR_WIDTH, CAR_HEIGHT))
+car_image = pygame.transform.rotate(car_image, -90)
 
 
 class Car:
     def __init__(self, x, y, mass=1.0):
         self.x = x
         self.y = y
-        self.angle = 270
+        self.angle = -90
         self.speed = 0
         self.mass = mass
         self.drift = 0
