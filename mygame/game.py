@@ -202,8 +202,8 @@ def run_game_with_network(network, generation_id, genome_id):
         print_text(win, f"Time: {elapsed_time:.2f}", (10, 40))
         print_text(win, f"Crossed lines: {crossed_lines}", (10, 70))
 
-        print_text(win, f"Genome: {genome_id}", (1000, 10))
-        print_text(win, f"Generation: {generation_id}", (1000, 40))
+        print_text(win, f"Genome: {genome_id}", (1050, 10))
+        print_text(win, f"Generation: {generation_id}", (1050, 40))
 
         print_text(win, f"Max fitness: {max_fitness:.2f}", (1000, 740))
         print_text(win, f"Max CL: {max_crossed_lines}", (1000, 770))

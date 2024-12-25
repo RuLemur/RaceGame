@@ -13,7 +13,7 @@ reset_on_extinction   = true
 num_inputs            = 9
 num_outputs           = 2
 # количество скрытых нейронов
-num_hidden            = 2
+num_hidden            = 4
 # начальные соединения
 initial_connection    = full
 # активация функции
