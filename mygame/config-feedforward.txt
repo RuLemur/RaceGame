@@ -6,7 +6,7 @@ fitness_threshold     = 100000
 # размер популяции
 pop_size              = 100
 # сброс популяции при вымирании всех видов
-reset_on_extinction   = false
+reset_on_extinction   = true
 
 [DefaultGenome]
 # количество входов и выходов сети
