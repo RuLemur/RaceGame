@@ -17,12 +17,13 @@ class Car:
         self.speed = 0
         self.mass = mass
         self.drift = 0
+        self.car_rect = car_image.get_rect(center=(self.x, self.y))
 
     def draw(self, win):
         # car_position = (self.x, self.y)
         rotated_image = pygame.transform.rotate(car_image, -self.angle - self.drift)
-        new_rect = rotated_image.get_rect(center=(self.x, self.y))
-        win.blit(rotated_image, new_rect.topleft)
+        self.car_rect = rotated_image.get_rect(center=(self.x, self.y))
+        win.blit(rotated_image, self.car_rect.topleft)
 
     def update(self):
         rad = math.radians(self.angle + self.drift)

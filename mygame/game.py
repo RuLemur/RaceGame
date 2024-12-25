@@ -14,9 +14,9 @@ from pygame import Surface
 from shapely.geometry.base import BaseGeometry
 
 from mygame.car import Car
-from mygame.constants import SCREEN_WIDTH, SCREEN_HEIGHT, CAR_WIDTH, CAR_HEIGHT, NEURON_RADIUS, WHITE, BLACK, TIMEOUT, \
+from mygame.constants import SCREEN_WIDTH, SCREEN_HEIGHT, NEURON_RADIUS, WHITE, BLACK, TIMEOUT, \
     FPS, GRIP, FORCE, DECELERATION, TRACK_COLOR, RED, CHECKPOINT_DIR, VIS_X, \
-    VIS_Y, VIS_HEIGHT, VIS_WIDTH
+    VIS_Y, VIS_HEIGHT, VIS_WIDTH, CAR_WIDTH, CAR_HEIGHT
 
 # Инициализация Pygame
 pygame.init()
@@ -26,6 +26,7 @@ win = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Car Racing")
 
 font = pygame.font.Font('freesansbold.ttf', 20)
+
 
 def parse_track(filename):
     with open(filename, 'r') as file:
@@ -173,6 +174,10 @@ max_crossed_lines = 0
 last_collistion = None
 
 
+def out_of_screen(car):
+    return car.x <= 0 or car.y <= 0
+
+
 def run_game_with_network(network, generation_id, genome, genome_id):
     crossed_lines = 0
     already_crossed = []
@@ -250,8 +255,10 @@ def run_game_with_network(network, generation_id, genome, genome_id):
             print_x(win, last_collistion)
 
         # Проверка столкновений
-        car_rect = pygame.Rect(car.x - CAR_WIDTH // 2, car.y - CAR_HEIGHT // 2, CAR_WIDTH, CAR_HEIGHT)
-        if check_collision(car_rect, track_outer) or check_collision(car_rect, track_inner):
+        car_rect = pygame.Rect(car.x - CAR_WIDTH // 2, car.y - CAR_WIDTH // 2, CAR_WIDTH // 2, CAR_WIDTH // 2)
+        pygame.draw.rect(win, WHITE, car_rect, 4)
+
+        if check_collision(car_rect, track_outer) or check_collision(car_rect, track_inner) or out_of_screen(car):
             print(f"Collision at position: ({car.x}, {car.y})")
             crossed_lines = 0
             running = False
@@ -262,7 +269,8 @@ def run_game_with_network(network, generation_id, genome, genome_id):
             fitness += 1000 * crossed_lines
             timeout += 10
         if check_collision_by_line(car_rect, [start_line],
-                                   already_crossed) and crossed_lines > 0 and crossed_lines % len(checkpoints_lines) == 0:
+                                   already_crossed) and crossed_lines > 0 and crossed_lines % len(
+            checkpoints_lines) == 0:
             print(f"Reached START LINE: ({car.x}, {car.y})")
             fitness += 5000 * len(crossed_lines)
 
