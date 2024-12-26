@@ -6,7 +6,7 @@ import pygame
 from shapely.geometry.linestring import LineString
 
 from mygame.car import Car
-from mygame.constants import WHITE, TIMEOUT, DECELERATION, FORCE, CAR_WIDTH, GRIP, RED, BLACK, GRAY
+from mygame.constants import WHITE, TIMEOUT, DECELERATION, FORCE, CAR_WIDTH, GRIP, RED, BLACK, GRAY, MAX_TIMEOUT
 
 
 def get_midpoint(sl):
@@ -36,6 +36,7 @@ class GameEnvironment:
         self.car = Car(start_x, start_y)
         self.fitness = 0
         self.crossed_lines = 0
+        self.laps = 0
         self.already_crossed = []
         self.genome_id = genome_id
         self.start_time = time.time()
@@ -46,6 +47,9 @@ class GameEnvironment:
     def update(self):
         elapsed_time = self.timeout - (time.time() - self.start_time)
         if elapsed_time <= 0 or not self.active:
+            self.active = False
+            return
+        if time.time() - self.start_time > MAX_TIMEOUT:
             self.active = False
             return
 
@@ -76,15 +80,17 @@ class GameEnvironment:
         if self.check_collision(self.track_outer) or self.check_collision(self.track_inner) or self.out_of_screen():
             self.crossed_lines = 0
             self.active = False
-        if self.check_collision_by_line(self.checkpoints_lines, self.already_crossed):
+        if self.check_collision_by_line(self.checkpoints_lines, False):
             self.crossed_lines += 1
-            self.fitness += self.car.speed
+            self.fitness += self.car.speed * (self.laps+1)
             self.timeout += 10
-        if (self.check_collision_by_line([self.start_line], self.already_crossed)
+        if (self.check_collision_by_line([self.start_line], True)
                 and self.crossed_lines > 0
                 and self.crossed_lines % len(self.checkpoints_lines) == 0):
-            self.fitness += 10 * self.car.speed
-
+            self.fitness += 10 * self.car.speed * (self.laps+1)
+            self.laps += 1
+            self.crossed_lines = 0
+            self.already_crossed = []
         self.fitness += self.car.speed * 0.05
 
     def render(self):
@@ -95,6 +101,9 @@ class GameEnvironment:
 
     def get_cl(self):
         return self.crossed_lines
+
+    def get_laps(self):
+        return self.laps
 
     def draw_line(self, angle: int):
         car_position = (self.car.x, self.car.y)
@@ -138,11 +147,12 @@ class GameEnvironment:
         # pygame.draw.rect(self.window, WHITE, rect, 3)
         return rect
 
-    def check_collision_by_line(self, track_lines, already_crossed):
+    def check_collision_by_line(self, track_lines, is_start_line):
         car_rect = self.get_rect()
         for line in track_lines:
             line_start, line_end = line
-            if car_rect.clipline(line_start, line_end) and (line_start, line_end) not in already_crossed:
-                already_crossed.append((line_start, line_end))
+            if car_rect.clipline(line_start, line_end) and (line_start, line_end) not in self.already_crossed:
+                if not is_start_line:
+                    self.already_crossed.append((line_start, line_end))
                 return True
         return False

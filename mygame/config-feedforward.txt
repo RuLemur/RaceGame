@@ -4,7 +4,7 @@ fitness_criterion     = max
 # пороговое значение фитнеса для завершения обучения
 fitness_threshold     = 200000
 # размер популяции
-pop_size              = 100
+pop_size              = 300
 # сброс популяции при вымирании всех видов
 reset_on_extinction   = true
 

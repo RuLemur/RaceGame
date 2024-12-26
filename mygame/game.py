@@ -58,129 +58,14 @@ pygame.display.set_caption("Car Racing")
 #     pygame.display.update()
 
 
-# generation: int = 1
-#
-# max_fitness = 0
-# max_crossed_lines = 0
-#
-# last_collistion = None
-
-
-# def run_game_with_network(cfg, generation_id, genome, genome_id):
-#     crossed_lines = 0
-#     already_crossed = []
-#
-#     network = neat.nn.FeedForwardNetwork.create(genome, cfg)
-#     start_x, start_y = get_midpoint(start_line)
-#     car = Car(start_x, start_y)
-#     fitness = 0
-#     clock = pygame.time.Clock()
-#     running = True
-#
-#     start_time = time.time()
-#     timeout = TIMEOUT
-#     while running:
-#         global max_fitness, max_crossed_lines
-#         max_fitness = max_fitness if max_fitness > fitness else fitness
-#         max_crossed_lines = max_crossed_lines if max_crossed_lines > crossed_lines else crossed_lines
-#
-#         clock.tick(FPS)
-#         win.fill(BLACK)
-#
-#         # Проверка на тайм-аут
-#         elapsed_time = timeout - (time.time() - start_time)
-#         if elapsed_time <= 0:
-#             print(f"Timeout reached: {elapsed_time:.2f} seconds")
-#             break
-#
-#         for event in pygame.event.get():
-#             if event.type == pygame.QUIT:
-#                 running = False
-#             if event.type == pygame.MOUSEBUTTONDOWN:
-#                 x, y = pygame.mouse.get_pos()
-#                 print(x, y)
-#
-#         # Получение входных данных для нейросети
-#         inputs = get_inputs_for_network(car)
-#
-#         # Получение выходных данных от нейросети
-#         output = network.activate(inputs)
-#
-#         # Используем выходы сети для управления автомобилем
-#         if output[0] > 0.5:  # left
-#             car.angle -= 5 * (1 - GRIP * car.speed / car.mass)
-#         if output[0] < -0.5:  # right
-#             car.angle += 5 * (1 - GRIP * car.speed / car.mass)
-#         if output[1] > 0.5:  # throttle
-#             car.speed += FORCE / car.mass
-#         elif output[1] < -0.5:  # brake
-#             if (car.speed - FORCE / car.mass) > 0:
-#                 car.speed -= FORCE / car.mass
-#         else:
-#             if car.speed > 0:
-#                 car.speed -= DECELERATION / car.mass
-#
-#         # Обновление машины
-#         car.update()
-#
-#         pygame.draw.lines(win, TRACK_COLOR, True, track_outer, 2)
-#         pygame.draw.lines(win, TRACK_COLOR, True, track_inner, 2)
-#
-#         for start_ch_line, end_ch_line in checkpoints_lines:
-#             pygame.draw.line(win, RED, start_ch_line, end_ch_line, 3)
-#         pygame.draw.line(win, (255, 255, 255), start_line[0], start_line[1], 5)
-#
-#         print_text(win, f"Fitness: {fitness:.2f}", (10, 10))
-#         print_text(win, f"Time: {elapsed_time:.2f}", (10, 40))
-#         print_text(win, f"Crossed lines: {crossed_lines}", (10, 70))
-#
-#         print_text(win, f"Genome: {genome_id}", (1050, 10))
-#         print_text(win, f"Generation: {generation_id}", (1050, 40))
-#
-#         print_text(win, f"Max fitness: {max_fitness:.2f}", (1000, 740))
-#         print_text(win, f"Max CL: {max_crossed_lines}", (1000, 770))
-#
-#         global last_collistion
-#         if last_collistion is not None:
-#             print_x(win, last_collistion)
-#
-#         # Проверка столкновений
-#         car_rect = pygame.Rect(car.x - CAR_WIDTH // 2, car.y - CAR_WIDTH // 2, CAR_WIDTH // 2, CAR_WIDTH // 2)
-#         pygame.draw.rect(win, WHITE, car_rect, 4)
-#
-#         if check_collision(car_rect, track_outer) or check_collision(car_rect, track_inner) or out_of_screen(car):
-#             print(f"Collision at position: ({car.x}, {car.y})")
-#             crossed_lines = 0
-#             running = False
-#             last_collistion = (car.x, car.y)
-#         if check_collision_by_line(car_rect, checkpoints_lines, already_crossed):
-#             print(f"Reached checkpoints: ({car.x}, {car.y})")
-#             crossed_lines += 1
-#             fitness += 1000 * crossed_lines
-#             timeout += 10
-#         if check_collision_by_line(car_rect, [start_line],
-#                                    already_crossed) and crossed_lines > 0 and crossed_lines % len(
-#             checkpoints_lines) == 0:
-#             print(f"Reached START LINE: ({car.x}, {car.y})")
-#             fitness += 5000 * len(crossed_lines)
-#
-#         car.draw(win)
-#
-#         # draw_network(win, genome, config)
-#         pygame.display.flip()
-#         # Увеличение фитнесс-функции за каждую пройденную дистанцию
-#         fitness += car.speed * 0.15
-#
-#     return fitness
-
-
 generation = 1
 max_fitness: int = 0
 max_cl = 0
+max_laps = 0
 
 
 def eval_genomes(genomes, cfg):
-    global generation, max_fitness, max_cl
+    global generation, max_fitness, max_cl, max_laps
     pygame.init()
 
     f = pygame.font.Font('freesansbold.ttf', 20)
@@ -229,6 +114,7 @@ def eval_genomes(genomes, cfg):
                     env.render()
                     max_cl = env.get_cl() if env.get_cl() > max_cl else max_cl
                     max_fitness = env.get_fitness() if env.get_fitness() > max_fitness else max_fitness
+                    max_laps = env.get_laps() if env.get_laps() > max_laps else max_laps
 
             d_text = f.render(f"Generation: {generation}", True, WHITE, BLACK)
             screen.blit(d_text, (10, 10))
@@ -236,7 +122,9 @@ def eval_genomes(genomes, cfg):
             screen.blit(d_text, (10, 40))
 
             d_text = f.render(f"Max CL: {max_cl}", True, WHITE, BLACK)
-            screen.blit(d_text, (840, 780))
+            screen.blit(d_text, (830, 780))
+            d_text = f.render(f"Max LAPS: {max_laps}", True, WHITE, BLACK)
+            screen.blit(d_text, (680, 780))
             d_text = f.render(f"Max Fitness: {max_fitness:.2f}", True, WHITE, BLACK)
             screen.blit(d_text, (950, 780))
 
