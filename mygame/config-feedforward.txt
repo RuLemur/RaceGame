@@ -15,7 +15,7 @@ num_outputs           = 2
 # количество скрытых нейронов
 num_hidden            = 4
 # начальные соединения
-initial_connection    = full
+initial_connection    = full_nodirect
 # активация функции
 activation_default    = tanh
 activation_mutate_rate  = 0.1

@@ -20,7 +20,6 @@ class Car:
         self.car_rect = car_image.get_rect(center=(self.x, self.y))
 
     def draw(self, win):
-        # car_position = (self.x, self.y)
         rotated_image = pygame.transform.rotate(car_image, -self.angle - self.drift)
         self.car_rect = rotated_image.get_rect(center=(self.x, self.y))
         win.blit(rotated_image, self.car_rect.topleft)
