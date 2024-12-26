@@ -9,10 +9,6 @@ from mygame.car import Car
 from mygame.constants import WHITE, TIMEOUT, DECELERATION, FORCE, CAR_WIDTH, GRIP, RED, BLACK, GRAY
 
 
-def out_of_screen(car):
-    return car.x <= 0 or car.y <= 0
-
-
 def get_midpoint(sl):
     x1, y1 = sl[0]
     x2, y2 = sl[1]
@@ -25,24 +21,6 @@ def calculate_end_pos(start_pos, angle_degrees, length):
     end_x = start_pos[0] + length * math.cos(angle_radians)
     end_y = start_pos[1] - length * math.sin(angle_radians)  # Минус, потому что ось Y направлена вниз
     return int(end_x), int(end_y)
-
-
-def check_collision(car_rect, track_lines):
-    for i in range(len(track_lines) - 1):
-        line_start = track_lines[i]
-        line_end = track_lines[i + 1]
-        if car_rect.clipline(line_start, line_end):
-            return True
-    return False
-
-
-def check_collision_by_line(car_rect, track_lines, already_crossed):
-    for line in track_lines:
-        line_start, line_end = line
-        if car_rect.clipline(line_start, line_end) and (line_start, line_end) not in already_crossed:
-            already_crossed.append((line_start, line_end))
-            return True
-    return False
 
 
 class GameEnvironment:
@@ -95,21 +73,19 @@ class GameEnvironment:
         self.car.update()
 
         # Проверка столкновений и обновление фитнеса
-        car_rect = pygame.Rect(self.car.x - CAR_WIDTH // 2, self.car.y - CAR_WIDTH // 2, CAR_WIDTH // 2, CAR_WIDTH // 2)
-        if check_collision(car_rect, self.track_outer) or check_collision(car_rect, self.track_inner) or out_of_screen(
-                self.car):
+        if self.check_collision(self.track_outer) or self.check_collision(self.track_inner) or self.out_of_screen():
             self.crossed_lines = 0
             self.active = False
-        if check_collision_by_line(car_rect, self.checkpoints_lines, self.already_crossed):
+        if self.check_collision_by_line(self.checkpoints_lines, self.already_crossed):
             self.crossed_lines += 1
-            self.fitness += 1000 * self.crossed_lines
+            self.fitness += self.car.speed
             self.timeout += 10
-        if (check_collision_by_line(car_rect, [self.start_line], self.already_crossed)
+        if (self.check_collision_by_line([self.start_line], self.already_crossed)
                 and self.crossed_lines > 0
                 and self.crossed_lines % len(self.checkpoints_lines) == 0):
-            self.fitness += 5000 * self.crossed_lines
+            self.fitness += 10 * self.car.speed
 
-        self.fitness += self.car.speed * 0.15
+        self.fitness += self.car.speed * 0.05
 
     def render(self):
         self.car.draw(self.window)
@@ -127,20 +103,6 @@ class GameEnvironment:
         m_line = LineString([car_position, line_end_pos])
         return m_line
 
-    def print_x(self, coords):
-        cross_length = 20
-
-        pos_x, pos_y = coords
-        # Координаты концов линий крестика
-        left_top = (pos_x - cross_length, pos_y - cross_length)
-        right_bottom = (pos_x + cross_length, pos_y + cross_length)
-        right_top = (pos_x + cross_length, pos_y - cross_length)
-        left_bottom = (pos_x - cross_length, pos_y + cross_length)
-
-        # Рисование линий крестика
-        pygame.draw.line(self.window, RED, left_top, right_bottom, 5)
-        pygame.draw.line(self.window, RED, right_top, left_bottom, 5)
-
     def get_inputs_for_network(self):
         # Пример: используем расстояния до ближайших препятствий как входы
         inputs = [self.car.angle, self.car.speed]
@@ -154,12 +116,33 @@ class GameEnvironment:
                     intersection = main_line.intersection(checked_line)
                     if not intersection.is_empty:
                         distance = min(distance, main_line.project(intersection))
-                        pygame.draw.circle(self.window, WHITE, intersection.coords[0], 5)
+                        pygame.draw.circle(self.window, WHITE, intersection.coords[0], 3)
             inputs.append(distance)
 
         return inputs
 
-    def draw_intersaction(self, m_line, inters, y_text_pos):
-        if not inters.is_empty:
-            # Вычисляем расстояние до точки пересечения от начала основной линии
-            pygame.draw.circle(self.window, WHITE, inters.coords[0], 5)
+    def out_of_screen(self):
+        return self.car.x <= 0 or self.car.y <= 0
+
+    def check_collision(self, track_lines):
+        car_rect = self.get_rect()
+        for i in range(len(track_lines) - 1):
+            line_start = track_lines[i]
+            line_end = track_lines[i + 1]
+            if car_rect.clipline(line_start, line_end):
+                return True
+        return False
+
+    def get_rect(self):
+        rect = pygame.Rect(self.car.x - CAR_WIDTH // 3, self.car.y - CAR_WIDTH // 3, CAR_WIDTH, CAR_WIDTH)
+        # pygame.draw.rect(self.window, WHITE, rect, 3)
+        return rect
+
+    def check_collision_by_line(self, track_lines, already_crossed):
+        car_rect = self.get_rect()
+        for line in track_lines:
+            line_start, line_end = line
+            if car_rect.clipline(line_start, line_end) and (line_start, line_end) not in already_crossed:
+                already_crossed.append((line_start, line_end))
+                return True
+        return False

@@ -23,7 +23,7 @@ GRIP = 0.01  # Коэффициент сцепления для дрифта
 DRIFT_FACTOR = 0.2  # Коэффициент дрифта
 BLACK = (0, 0, 0)
 SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 800
-FPS = 30
+FPS = 60
 CAR_WIDTH, CAR_HEIGHT = 25, 55
 WHITE = (255, 255, 255)
 GRAY = (100, 100, 100)
@@ -35,6 +35,6 @@ VIS_X = SCREEN_WIDTH - VIS_WIDTH
 VIS_Y = SCREEN_HEIGHT - VIS_HEIGHT
 
 # Определите, сколько геномов вы хотите визуализировать
-GROUP_SIZE = 5
+GROUP_SIZE = 10
 
 CHECKPOINT_DIR = 'checkpoints'

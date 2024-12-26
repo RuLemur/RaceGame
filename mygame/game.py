@@ -174,8 +174,8 @@ pygame.display.set_caption("Car Racing")
 #     return fitness
 
 
-generation = 0
-max_fitness = 0
+generation = 1
+max_fitness: int = 0
 max_cl = 0
 
 
@@ -199,18 +199,18 @@ def eval_genomes(genomes, cfg):
         start_time = time.time()
         # Определите текущую группу
         start_index = group_index * GROUP_SIZE
-        end_index = min(start_index + GROUP_SIZE - 1, len(genomes))
+        end_index = min(start_index + GROUP_SIZE, len(genomes))
         current_group = genomes[start_index:end_index]
 
         # Создайте среду для текущей группы
         environments = [
             GameEnvironment(genome, cfg, genome_id, screen, track_outer, track_inner, checkpoints_lines, start_line) for
             genome_id, genome in current_group]
+
         all_environments.extend(environments)
-        active_genomes = len(environments)
         # Основной цикл симуляции для текущей группы
         running = True
-        while running and active_genomes > 0:
+        while running and any(env.active for env in environments):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -230,11 +230,9 @@ def eval_genomes(genomes, cfg):
                     max_cl = env.get_cl() if env.get_cl() > max_cl else max_cl
                     max_fitness = env.get_fitness() if env.get_fitness() > max_fitness else max_fitness
 
-                else:
-                    active_genomes -= 1
             d_text = f.render(f"Generation: {generation}", True, WHITE, BLACK)
             screen.blit(d_text, (10, 10))
-            d_text = f.render(f"Genoms: {start_index + 1}-{end_index + 1}", True, WHITE, BLACK)
+            d_text = f.render(f"Genoms: {start_index + 1}-{end_index}", True, WHITE, BLACK)
             screen.blit(d_text, (10, 40))
 
             d_text = f.render(f"Max CL: {max_cl}", True, WHITE, BLACK)
