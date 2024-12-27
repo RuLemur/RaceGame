@@ -3,24 +3,19 @@ import time
 
 import neat
 import pygame
+import pymunk
+import pymunk.pygame_util
 from shapely.geometry.linestring import LineString
 
-from mygame.car import Car
-from mygame.constants import WHITE, TIMEOUT, DECELERATION, FORCE, CAR_WIDTH, GRIP, RED, BLACK, GRAY, MAX_TIMEOUT
+from mygame.constants import WHITE, TIMEOUT, GRAY, MAX_TIMEOUT
+from mygame.physic_car import PhyCar
 
+from helpers.calculate import get_midpoint
 
-def get_midpoint(sl):
-    x1, y1 = sl[0]
-    x2, y2 = sl[1]
-    return (x1 + x2) / 2, (y1 + y2) / 2
+# Инициализация Pymunk
+space = pymunk.Space()
+space.gravity = (0, 0)  # Отсутствие гравитации в игре с видом сверху
 
-
-# Функция для вычисления конечной точки
-def calculate_end_pos(start_pos, angle_degrees, length):
-    angle_radians = math.radians(angle_degrees)
-    end_x = start_pos[0] + length * math.cos(angle_radians)
-    end_y = start_pos[1] - length * math.sin(angle_radians)  # Минус, потому что ось Y направлена вниз
-    return int(end_x), int(end_y)
 
 
 class GameEnvironment:
@@ -33,7 +28,7 @@ class GameEnvironment:
 
         self.genome = genome
         self.network = neat.nn.FeedForwardNetwork.create(genome, config)
-        self.car = Car(start_x, start_y)
+        self.car = PhyCar(space, (start_x, start_y), (50, 30), False, pymunk.pygame_util.DrawOptions(window))
         self.fitness = 0
         self.crossed_lines = 0
         self.laps = 0
@@ -61,20 +56,16 @@ class GameEnvironment:
 
         # Управление автомобилем на основе выходов сети
         if output[0] > 0.5:
-            self.car.angle -= 5 * (1 - GRIP * self.car.speed / self.car.mass)
+            self.car.turn_power = 1.0
         if output[0] < -0.5:
-            self.car.angle += 5 * (1 - GRIP * self.car.speed / self.car.mass)
+            self.car.turn_power = 1.0
         if output[1] > 0.5:
-            self.car.speed += FORCE / self.car.mass
+            self.car.throttle_power = 1.0
         elif output[1] < -0.5:
-            if (self.car.speed - FORCE / self.car.mass) > 0:
-                self.car.speed -= FORCE / self.car.mass
-        else:
-            if self.car.speed > 0:
-                self.car.speed -= DECELERATION / self.car.mass
+            self.car.throttle_power = 1.0
 
         # Обновление машины
-        self.car.update()
+        self.car.car_update()
 
         # Проверка столкновений и обновление фитнеса
         if self.check_collision(self.track_outer) or self.check_collision(self.track_inner) or self.out_of_screen():
@@ -82,16 +73,16 @@ class GameEnvironment:
             self.active = False
         if self.check_collision_by_line(self.checkpoints_lines, False):
             self.crossed_lines += 1
-            self.fitness += self.car.speed * (self.laps+1)
+            self.fitness += self.laps + 1
             self.timeout += 10
         if (self.check_collision_by_line([self.start_line], True)
                 and self.crossed_lines > 0
                 and self.crossed_lines % len(self.checkpoints_lines) == 0):
-            self.fitness += 10 * self.car.speed * (self.laps+1)
+            self.fitness += 10 * (self.laps + 1)
             self.laps += 1
             self.crossed_lines = 0
             self.already_crossed = []
-        self.fitness += self.car.speed * 0.05
+        # self.fitness += self.car.speed * 0.05
 
     def render(self):
         self.car.draw(self.window)
@@ -106,15 +97,15 @@ class GameEnvironment:
         return self.laps
 
     def draw_line(self, angle: int):
-        car_position = (self.car.x, self.car.y)
-        line_end_pos = calculate_end_pos(car_position, -self.car.angle + angle, 500)
+        car_position = self.car.get_car_position()
+        line_end_pos = calculate_end_pos(car_position, -self.car.body.angle + angle, 500)
         pygame.draw.line(self.window, GRAY, car_position, line_end_pos, 1)
         m_line = LineString([car_position, line_end_pos])
         return m_line
 
     def get_inputs_for_network(self):
         # Пример: используем расстояния до ближайших препятствий как входы
-        inputs = [self.car.angle, self.car.speed]
+        inputs = [self.car.body.angle, self.car.get_speed()]
 
         for angle in [-150, -90, -45, 0, 45, 90, 150]:
             main_line = self.draw_line(angle)
@@ -131,10 +122,11 @@ class GameEnvironment:
         return inputs
 
     def out_of_screen(self):
-        return self.car.x <= 0 or self.car.y <= 0
+        x, y = self.car.get_car_position()
+        return x <= 0 or y <= 0
 
     def check_collision(self, track_lines):
-        car_rect = self.get_rect()
+        car_rect = self.car.get_car_rect()
         for i in range(len(track_lines) - 1):
             line_start = track_lines[i]
             line_end = track_lines[i + 1]
@@ -142,13 +134,8 @@ class GameEnvironment:
                 return True
         return False
 
-    def get_rect(self):
-        rect = pygame.Rect(self.car.x - CAR_WIDTH // 3, self.car.y - CAR_WIDTH // 3, CAR_WIDTH, CAR_WIDTH)
-        # pygame.draw.rect(self.window, WHITE, rect, 3)
-        return rect
-
     def check_collision_by_line(self, track_lines, is_start_line):
-        car_rect = self.get_rect()
+        car_rect = self.car.get_car_rect()
         for line in track_lines:
             line_start, line_end = line
             if car_rect.clipline(line_start, line_end) and (line_start, line_end) not in self.already_crossed:

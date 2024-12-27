@@ -163,4 +163,6 @@ cython_debug/
 .idea/
 
 /.venv1/
-/checkpoints/
+/car_racer/checkpoints/checkpoints/
+/car_racer/checkpoints/good_games/
+/car_racer/checkpoints/

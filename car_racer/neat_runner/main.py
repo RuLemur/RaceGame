@@ -6,7 +6,7 @@ import pygame
 
 from mygame.constants import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, FPS, CHECKPOINT_DIR, TRACK_COLOR, RED, WHITE, \
     GROUP_SIZE
-from mygame.file_worker import save_checkpoint, load_checkpoint, parse_track
+from mygame.file_manager.file_worker import save_checkpoint, load_checkpoint, parse_track
 from mygame.game_instatnse import GameEnvironment
 
 # Инициализация Pygame
@@ -15,6 +15,8 @@ pygame.init()
 # Настройка окна
 win = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Car Racing")
+
+
 
 # def draw_network(win, genome, config):
 #     # Очистка области визуализации

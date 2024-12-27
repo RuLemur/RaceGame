@@ -38,4 +38,4 @@ VIS_Y = SCREEN_HEIGHT - VIS_HEIGHT
 # Определите, сколько геномов вы хотите визуализировать
 GROUP_SIZE = 10
 
-CHECKPOINT_DIR = 'checkpoints'
+
