@@ -46,6 +46,7 @@ def eval_genomes(genomes, cfg):
         # Основной цикл симуляции для текущей группы
         running = True
         while running and any(env.active for env in environments):
+            left_in_group = sum(1 for env in environments if env.active)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -62,9 +63,10 @@ def eval_genomes(genomes, cfg):
                     best_lap_time = lap_time if lap_time < best_lap_time and lap_time != 0 else best_lap_time
                 screen.draw_all([(f"Generation: {generation}", (10, 10)),
                                  (f"Genoms: {start_index + 1}-{end_index}", (10, 40)),
-                                 (f"Best lap time: {best_lap_time:.2f}", (1020, 660)),
-                                 (f"Max CL: {max_cl}", (1020, 700)),
-                                 (f"Max LAPS: {max_laps}", (1020, 740)),
+                                 (f"Left in group: {left_in_group}", (10, 70)),
+                                 (f"Best lap time: {best_lap_time:.2f}", (1020, 690)),
+                                 (f"Max CL: {max_cl}", (1020, 720)),
+                                 (f"Max LAPS: {max_laps}", (1020, 750)),
                                  (f"Max Fitness: {max_fitness:.2f}", (1020, 780)),
                                  (f"Time: {time.time() - start_time:.2f} sec", (1030, 10)),
                                  ])

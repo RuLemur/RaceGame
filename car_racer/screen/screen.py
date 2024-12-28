@@ -4,6 +4,7 @@ from car_racer.file_manager.file_worker import parse_track
 
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
+CHECKPOINT_COLOR = (15, 128, 0)
 WHITE = (255, 255, 255)
 
 TRACK_COLOR = (150, 150, 150)
@@ -32,7 +33,7 @@ class Screen:
         pygame.draw.lines(self.win, TRACK_COLOR, True, self.track_outer, 2)
         pygame.draw.lines(self.win, TRACK_COLOR, True, self.track_inner, 2)
         for start_ch_line, end_ch_line in self.checkpoints_lines:
-            pygame.draw.line(self.win, RED, start_ch_line, end_ch_line, 3)
+            pygame.draw.line(self.win, CHECKPOINT_COLOR, start_ch_line, end_ch_line, 3)
         pygame.draw.line(self.win, (255, 255, 255), self.start_line[0], self.start_line[1], 5)
 
     def get_track(self):
