@@ -9,8 +9,8 @@ from car_racer.file_manager.file_worker import save_checkpoint, CHECKPOINT_DIR, 
 from car_racer.neat_runner.game_instatnse import GameEnvironment
 from car_racer.screen.screen import Screen, SCREEN_WIDTH, SCREEN_HEIGHT
 
-GROUP_SIZE = 1
-FPS = 30
+GROUP_SIZE = 10
+FPS = 24
 
 generation = 1
 max_fitness: int = 0
