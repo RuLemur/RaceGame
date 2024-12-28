@@ -1,8 +1,11 @@
 import os
 import pickle
 
-CHECKPOINT_DIR = 'car_racer/checkpoints/chekpoints'
+import neat
+
+CHECKPOINT_DIR = 'car_racer/checkpoints/checkpoints'
 POINTS_DIR = 'car_racer/tracks/'
+CONFIG_DIR = 'car_racer/config/'
 
 
 def parse_track(filename):
@@ -35,3 +38,11 @@ def load_checkpoint(filename):
         population = pickle.load(f)
     print(f"Checkpoint loaded from {filename}")
     return population
+
+
+def get_neat_config():
+    config_path = os.path.join(CONFIG_DIR + "config-feedforward.txt")
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                                config_path)
+    return config

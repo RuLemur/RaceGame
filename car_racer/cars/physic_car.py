@@ -1,4 +1,5 @@
 import math
+import time
 
 import pygame
 import pymunk
@@ -6,48 +7,49 @@ import pymunk
 import pymunk.pygame_util
 from shapely.geometry.linestring import LineString
 
-from car_racer.constants import GRAY
+from car_racer.cars.abs_car import Car
+from car_racer.constants import GRAY, WHITE
 from car_racer.screen.screen import Screen
 from helpers.calculate import calculate_end_pos, get_midpoint
 
 CAR_HEIGHT = 80
 CAR_WIDTH = 50
 VELOCITY_EPSILON = 0.1
-ROTATE_POWER = 5  # Сила тяги
-THROTTLE_POWER = 25  # Сила тяги
+ROTATE_POWER = 3.5  # Сила поворота
+THROTTLE_POWER = 200  # Сила тяги
+MAX_SPEED = 600  # Установи подходящее значение
+SPEED_EFFECT = 0.3  # Чем больше значение, тем меньше поворот на высокой скорости
+ACCELERATION_RATE = 0.2
+BRAKE_RATE = 15
 
 
-# Загрузка изображений
-
-
-class PhyCar:
+class PhyCar(Car):
     def __init__(self, screen: Screen, car_size):
         car_image = pygame.image.load("./assets/car.png")
         car_image = pygame.transform.scale(car_image, car_size)
         car_image = pygame.transform.rotate(car_image, -90)
         self.car_image = car_image
 
+        self.lap_start_time = time.time()
+        self.best_lap_time = 0
         self.cl_count = 0
         self.fitness = 0
         self.lap_count = 0
         self.already_crossed = []
-        self.mass = 1000
+        self.mass = 1
         self.car_size = car_size
 
-        self.damping = 0.95  # Коэффициент гашения скорости
+        self.damping_rate = 0.93  # Коэффициент гашения скорости
 
         self.moment = pymunk.moment_for_box(self.mass, self.car_size)
 
         body = pymunk.Body(self.mass, self.moment)
         body.position = get_midpoint(screen.start_line)
         shape = pymunk.Poly.create_box(body, self.car_size)
-        width, height = car_size
-        # vertices = [(10, -height / 2), (-width, -height / 2), (-width, height / 2), (10, height / 2)]
-        # shape = pymunk.Poly(body, vertices)
 
         self.car_rect = car_image.get_rect(center=body.position)
 
-        shape.friction = 0.01
+        shape.friction = 0.11
 
         self.screen = screen
 
@@ -58,54 +60,79 @@ class PhyCar:
         self.body = body
         self.draw_options = pymunk.pygame_util.DrawOptions(self.screen.get_window())
         self.draw_speed_vectore = True
-        self.body.angle = -1.5708
-
-    def get_car(self):
-        return self.body
+        self.body.angle = math.degrees(90)
+        self.collistion_rect = pygame.Rect(self.body.position.x - CAR_WIDTH // 3, self.body.position.y - CAR_WIDTH // 3,
+                                           CAR_WIDTH, CAR_WIDTH)
 
     def throttle(self, throttle_power):
-        if throttle_power > 0:
+        if throttle_power != 0:
+            # Ограничиваем throttle_power в пределах от 0 до 1
+            throttle_power = max(0, min(1, throttle_power))
+
+            target_speed = throttle_power * MAX_SPEED
+            current_speed = self.body.velocity.length
+
+            if throttle_power > 0:
+                # Если throttle_power больше 0, разгоняемся
+                new_speed = current_speed + (target_speed - current_speed) * ACCELERATION_RATE
+            else:
+                # Если throttle_power равно 0, замедляемся
+                new_speed = current_speed - BRAKE_RATE
+                if new_speed < 0:
+                    new_speed = 0
+
+                # Обновляем вектор скорости
+            if new_speed > MAX_SPEED:
+                new_speed = MAX_SPEED
+
             direction = pymunk.Vec2d(1, 0).rotated(self.body.angle)
-            force_vector = direction * throttle_power * THROTTLE_POWER
-            self.body.velocity = force_vector  # Сброс скорости и применение новой силы
-        elif throttle_power < 0:
-            direction = pymunk.Vec2d(1, 0).rotated(self.body.angle)
-            force_vector = direction * throttle_power * THROTTLE_POWER
-            self.body.velocity = force_vector  # Сброс скорости и применение новой силы
+            self.body.velocity = direction.normalized() * new_speed
 
     def turn(self, turn_power):
-        if turn_power > 0:
-            if abs(self._get_max_velocity()) >= VELOCITY_EPSILON:
-                self.body.angular_velocity = min(self.body.angular_velocity + turn_power * ROTATE_POWER,
-                                                 ROTATE_POWER)
+        # Чем выше скорость, тем хуже управляемость
+        current_speed = self.body.velocity.length
 
-        elif turn_power < 0:
-            if abs(self._get_max_velocity()) >= VELOCITY_EPSILON:
-                self.body.angular_velocity = max(self.body.angular_velocity + turn_power * ROTATE_POWER,
-                                                 -ROTATE_POWER)
+        if current_speed < VELOCITY_EPSILON:
+            return
+
+        # Уменьшаем поворотное усилие при увеличении скорости
+        turn_effectiveness = max(0.05, 1 - SPEED_EFFECT * (current_speed / MAX_SPEED))
+        if turn_power != 0:
+            angular_change = turn_power * ROTATE_POWER * turn_effectiveness
+            self.body.angular_velocity += angular_change
+
+            # Ограничиваем максимальную угловую скорость
+            self.body.angular_velocity = max(min(self.body.angular_velocity, ROTATE_POWER), -ROTATE_POWER)
 
     def update(self):
-        print(self.body.angle)
-
         self.space.step(1 / 60)
+        self.collistion_rect = pygame.Rect(self.body.position.x - (CAR_WIDTH // 4),
+                                           self.body.position.y - (CAR_HEIGHT // 4),
+                                           CAR_WIDTH // 2, CAR_WIDTH // 2)
+
+    def damping(self, throttle: bool, turning: bool):
+        if throttle:
+            self.body.velocity *= self.damping_rate
+        if turning:
+            self.body.angular_velocity *= self.damping_rate
+        self.body.velocity = pymunk.Vec2d(1, 0).rotated(self.body.angle) * self.get_speed()
 
     def draw(self):
+    #     for a in [-140, -90, -30, 0, 30, 90, 140]:
+    #         self.draw_line(a)
+
         rotated_image = pygame.transform.rotate(self.car_image, -math.degrees(self.body.angle))
         self.car_rect = rotated_image.get_rect(center=self.body.position)
         if self.draw_speed_vectore:
-            self.space.debug_draw(self.draw_options)
+            # self.space.debug_draw(self.draw_options)
 
             # Отрисовка вектора силы
             if self.body.velocity.length > 0:
-                end_pos_velocity = self.body.position + self.body.velocity.normalized() * 50
+                end_pos_velocity = self.body.position + self.body.velocity.normalized() * self.get_speed()
                 pygame.draw.line(self.screen.get_window(), (0, 0, 255), self.body.position, end_pos_velocity, 3)
-        self.screen.get_window().blit(rotated_image, self.car_rect.topleft)
 
-    def get_car_rect(self):
-        rect = pygame.Rect(self.body.position.x - CAR_WIDTH // 3, self.body.position.y - CAR_WIDTH // 3,
-                           CAR_WIDTH, CAR_WIDTH)
-        # pygame.draw.rect(self.window, WHITE, rect, 3)
-        return rect
+        self.screen.get_window().blit(rotated_image, self.car_rect.topleft)
+        pygame.draw.rect(self.screen.get_window(), (255, 255, 255), self.collistion_rect)
 
     def _get_max_velocity(self):
         return max(self.body.velocity.x, self.body.velocity.y)
@@ -113,27 +140,30 @@ class PhyCar:
     def _get_min_velocity(self):
         return min(self.body.velocity.x, self.body.velocity.y)
 
+    def get_lap_time(self):
+        return self.best_lap_time
+
     def get_fitness(self):
         return self.fitness
 
     def get_cl(self):
-        return self.crossed_lines
+        return self.cl_count
+
+    def add_fitness(self, fitness):
+        self.fitness += fitness
 
     def get_laps(self):
-        return self.laps
+        return self.lap_count
 
     def get_postion(self) -> (int, int):
-        return self.body.position.x, self.body.position.x
-
-    def set_postion(self, x: int, y: int):
-        self.body.position.x, self.body.position.x = x, y
+        return self.body.position.x, self.body.position.y
 
     def get_speed(self) -> float:
-        return self._get_max_velocity()
+        return self.body.velocity.length
 
     def draw_line(self, angle: int):
         car_position = self.get_postion()
-        line_end_pos = calculate_end_pos(car_position, -self.body.angle + angle, 500)
+        line_end_pos = calculate_end_pos(car_position, -math.degrees(self.body.angle) + angle, 500)
         pygame.draw.line(self.screen.get_window(), GRAY, car_position, line_end_pos, 1)
         m_line = LineString([car_position, line_end_pos])
         return m_line
@@ -144,8 +174,8 @@ class PhyCar:
                 line_start = track_lines[i]
                 line_end = track_lines[i + 1]
 
-                if (self.car_rect.clipline(line_start, line_end) or
-                        (self.body.position.x <= 0 or self.body.position.x >= self.screen.screen_height
+                if (self.collistion_rect.clipline(line_start, line_end) or
+                        (self.body.position.x <= 0 or self.body.position.x >= self.screen.screen_width
                          or self.body.position.y <= 0 or self.body.position.y >= self.screen.screen_height)):
                     return True
         return False
@@ -153,15 +183,38 @@ class PhyCar:
     def check_collision_with_checkpoint(self):
         for line in self.screen.checkpoints_lines:
             line_start, line_end = line
-            if self.car_rect.clipline(line_start, line_end) and (
+            if self.collistion_rect.clipline(line_start, line_end) and (
                     line_start, line_end) not in self.already_crossed:
                 self.already_crossed.append((line_start, line_end))
                 self.cl_count += 1
                 return True
+        return False
+
+    def check_collision_with_start(self):
         line_start, line_end = self.screen.start_line
-        if (self.car_rect.clipline(line_start, line_end) and (line_start, line_end) and
-                len(self.already_crossed) == self.screen.checkpoints_lines):
+        if (self.collistion_rect.clipline(line_start, line_end) and
+                len(self.already_crossed) == len(self.screen.checkpoints_lines)):
             self.already_crossed = []
             self.lap_count += 1
+            self.best_lap_time = time.time() - self.lap_start_time
+            self.lap_start_time = time.time()
             return True
         return False
+
+    def get_inputs_for_network(self):
+        # Пример: используем расстояния до ближайших препятствий как входы
+        inputs = [self.body.angle, self.get_speed()]
+
+        for angle in [-150, -90, -45, 0, 45, 90, 150]:
+            main_line = self.draw_line(angle)
+            distance = float('inf')
+            for line in [self.screen.track_outer, self.screen.track_inner]:
+                for i in range(len(line) - 1):
+                    checked_line = LineString([line[i], line[i + 1]])
+                    intersection = main_line.intersection(checked_line)
+                    if not intersection.is_empty:
+                        distance = min(distance, main_line.project(intersection))
+                        pygame.draw.circle(self.screen.get_window(), WHITE, intersection.coords[0], 3)
+            inputs.append(distance)
+
+        return inputs
