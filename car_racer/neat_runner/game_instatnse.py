@@ -19,7 +19,7 @@ class GameEnvironment:
         self.genome = genome
         self.network = neat.nn.FeedForwardNetwork.create(genome, config)
         # self.car = SimpleCar(screen, car_size=(35, 75))
-        self.car = PhyCar(screen, car_size=(35, 75))
+        self.car = PhyCar(screen, car_size=(15, 35))
 
         self.genome_id = genome_id
         self.start_time = time.time()

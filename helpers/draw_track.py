@@ -56,10 +56,6 @@ class Drawer:
         self.all_points = []
         self.font = pygame.font.Font(None, 20)
 
-    def set_cursore_mode(self, value):
-        self.last_pos = None
-        self.cursor_mode = value
-
     # Функция для отрисовки кнопки
     def draw_button(self, position, text):
         pygame.draw.rect(self.screen, BUTTON_COLOR, (*position, 90, 30))

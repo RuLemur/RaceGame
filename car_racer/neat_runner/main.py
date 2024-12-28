@@ -7,9 +7,9 @@ import pygame
 from car_racer.constants import TIMEOUT, MAX_TIMEOUT
 from car_racer.file_manager.file_worker import save_checkpoint, CHECKPOINT_DIR, load_checkpoint, get_neat_config
 from car_racer.neat_runner.game_instatnse import GameEnvironment
-from car_racer.screen.screen import Screen
+from car_racer.screen.screen import Screen, SCREEN_WIDTH, SCREEN_HEIGHT
 
-GROUP_SIZE = 10
+GROUP_SIZE = 1
 FPS = 30
 
 generation = 1
@@ -64,13 +64,12 @@ def eval_genomes(genomes, cfg):
                 screen.draw_all([(f"Generation: {generation}", (10, 10)),
                                  (f"Genoms: {start_index + 1}-{end_index}", (10, 40)),
                                  (f"Left in group: {left_in_group}", (10, 70)),
-                                 (f"Best lap time: {best_lap_time:.2f}", (1020, 690)),
-                                 (f"Max CL: {max_cl}", (1020, 720)),
-                                 (f"Max LAPS: {max_laps}", (1020, 750)),
-                                 (f"Max Fitness: {max_fitness:.2f}", (1020, 780)),
-                                 (f"Time: {time.time() - start_time:.2f} sec", (1030, 10)),
+                                 (f"Best lap time: {best_lap_time:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 130)),
+                                 (f"Max CL: {max_cl}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 100)),
+                                 (f"Max LAPS: {max_laps}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 70)),
+                                 (f"Max Fitness: {max_fitness:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 30)),
+                                 (f"Time: {time.time() - start_time:.2f} sec", (SCREEN_WIDTH-200, 10)),
                                  ])
-
 
             pygame.display.flip()
             clock.tick(FPS)

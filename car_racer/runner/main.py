@@ -5,14 +5,13 @@ from car_racer.cars.physic_car import PhyCar
 from car_racer.screen.screen import Screen
 from helpers.calculate import get_midpoint
 
-WIDTH, HEIGHT = 1200, 800
-
+WIDTH, HEIGHT = 2000, 1200
 
 def run():
     window = Screen()
     clock = pygame.time.Clock()
 
-    car_body = PhyCar(window, car_size=(35, 75))
+    car_body = PhyCar(window, car_size=(15, 35))
     # car_body = SimpleCar(window, car_size=(35, 75))
     running = True
     while running:

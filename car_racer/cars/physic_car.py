@@ -60,9 +60,12 @@ class PhyCar(Car):
         self.body = body
         self.draw_options = pymunk.pygame_util.DrawOptions(self.screen.get_window())
         self.draw_speed_vectore = True
-        self.body.angle = math.degrees(90)
-        self.collistion_rect = pygame.Rect(self.body.position.x - CAR_WIDTH // 3, self.body.position.y - CAR_WIDTH // 3,
-                                           CAR_WIDTH, CAR_WIDTH)
+        self.x, self.y = self.car_size
+        self.collistion_rect = pygame.Rect(self.body.position.x - self.x // 3,
+                                           self.body.position.y - self.x // 3,
+                                           self.x, self.x)
+        self.perpendicular_angle(self.screen.start_line)
+
 
     def throttle(self, throttle_power):
         if throttle_power != 0:
@@ -106,9 +109,9 @@ class PhyCar(Car):
 
     def update(self):
         self.space.step(1 / 60)
-        self.collistion_rect = pygame.Rect(self.body.position.x - (CAR_WIDTH // 4),
-                                           self.body.position.y - (CAR_HEIGHT // 4),
-                                           CAR_WIDTH // 2, CAR_WIDTH // 2)
+        self.collistion_rect = pygame.Rect(self.body.position.x - self.x // 3,
+                                           self.body.position.y - self.x // 3,
+                                           self.x, self.x)
 
     def damping(self, throttle: bool, turning: bool):
         if throttle:
@@ -118,8 +121,8 @@ class PhyCar(Car):
         self.body.velocity = pymunk.Vec2d(1, 0).rotated(self.body.angle) * self.get_speed()
 
     def draw(self):
-    #     for a in [-140, -90, -30, 0, 30, 90, 140]:
-    #         self.draw_line(a)
+        #     for a in [-140, -90, -30, 0, 30, 90, 140]:
+        #         self.draw_line(a)
 
         rotated_image = pygame.transform.rotate(self.car_image, -math.degrees(self.body.angle))
         self.car_rect = rotated_image.get_rect(center=self.body.position)
@@ -218,3 +221,13 @@ class PhyCar(Car):
             inputs.append(distance)
 
         return inputs
+
+    def perpendicular_angle(self, line):
+        # Создаем вектора из точек
+        p1, p2 = line
+        vec = pymunk.Vec2d(p2[0] - p1[0], p2[1] - p1[1])
+
+        # Угол вектора относительно оси x
+        angle = vec.angle  # Это возвращает угол в радианах относительно оси x
+
+        self.body.angle = angle + math.pi / 2  # 90 градусов в радианах
