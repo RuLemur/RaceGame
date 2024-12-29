@@ -15,9 +15,9 @@ from helpers.calculate import calculate_end_pos, get_midpoint
 CAR_HEIGHT = 80
 CAR_WIDTH = 50
 VELOCITY_EPSILON = 0.1
-ROTATE_POWER = 3.5  # Сила поворота
+ROTATE_POWER = 3.0  # Сила поворота
 THROTTLE_POWER = 200  # Сила тяги
-MAX_SPEED = 600  # Установи подходящее значение
+MAX_SPEED = 400  # Установи подходящее значение
 SPEED_EFFECT = 0.3  # Чем больше значение, тем меньше поворот на высокой скорости
 ACCELERATION_RATE = 0.2
 BRAKE_RATE = 15
@@ -49,7 +49,7 @@ class PhyCar(Car):
 
         self.car_rect = car_image.get_rect(center=body.position)
 
-        shape.friction = 0.11
+        shape.friction = 0.25
 
         self.screen = screen
 
@@ -66,6 +66,9 @@ class PhyCar(Car):
                                            self.x, self.x)
         self.perpendicular_angle(self.screen.start_line)
         self.visible = visible
+
+        self.total_distance = 0.0  # Инициализация общего пройденного расстояния
+        self.last_position = self.body.position  # Начальная позиция
 
 
     def throttle(self, throttle_power):
@@ -109,10 +112,19 @@ class PhyCar(Car):
             self.body.angular_velocity = max(min(self.body.angular_velocity, ROTATE_POWER), -ROTATE_POWER)
 
     def update(self):
-        self.space.step(1 / 60)
+        self.space.step(1 / 30)
         self.collistion_rect = pygame.Rect(self.body.position.x - self.x // 3,
                                            self.body.position.y - self.x // 3,
                                            self.x, self.x)
+
+        # Вычисляем пройденное расстояние
+        current_position = self.body.position
+        distance_traveled = (current_position - self.last_position).length
+        self.total_distance += distance_traveled
+        self.last_position = current_position
+
+    def get_distance(self):
+        return self.total_distance
 
     def damping(self, throttle: bool, turning: bool):
         if throttle:
@@ -181,6 +193,7 @@ class PhyCar(Car):
                 if (self.collistion_rect.clipline(line_start, line_end) or
                         (self.body.position.x <= 0 or self.body.position.x >= self.screen.screen_width
                          or self.body.position.y <= 0 or self.body.position.y >= self.screen.screen_height)):
+                    self.fitness += self.get_distance() * 0.001
                     return True
         return False
 

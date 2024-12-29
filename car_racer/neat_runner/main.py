@@ -9,8 +9,8 @@ from car_racer.file_manager.file_worker import save_checkpoint, CHECKPOINT_DIR, 
 from car_racer.neat_runner.game_instatnse import GameEnvironment
 from car_racer.screen.screen import Screen, SCREEN_WIDTH, SCREEN_HEIGHT
 
-GROUP_SIZE = 10
-MAX_VISIBLE = 3
+GROUP_SIZE = 30
+MAX_VISIBLE = 10
 FPS = 60
 
 generation = 1
@@ -18,10 +18,11 @@ max_fitness: int = 0
 max_cl = 0
 max_laps = 0
 best_lap_time = MAX_TIMEOUT
+max_distance = 0
 
 
 def eval_genomes(genomes, cfg):
-    global generation, max_fitness, max_cl, max_laps, best_lap_time
+    global generation, max_fitness, max_cl, max_laps, best_lap_time, max_distance
     clock = pygame.time.Clock()
 
     screen = Screen()
@@ -32,6 +33,8 @@ def eval_genomes(genomes, cfg):
     # Для хранения всех сред для последующего отображения
     all_environments = []
 
+    best_genome = None
+    gen_fitness = 0
     for group_index in range(num_groups):
         start_time = time.time()
         # Определите текущую группу
@@ -49,6 +52,7 @@ def eval_genomes(genomes, cfg):
         all_environments.extend(environments)
         # Основной цикл симуляции для текущей группы
         running = True
+
         while running and any(env.active for env in environments):
             left_in_group = sum(1 for env in environments if env.active)
             for event in pygame.event.get():
@@ -63,6 +67,7 @@ def eval_genomes(genomes, cfg):
                     max_cl = env.car.get_cl() if env.car.get_cl() > max_cl else max_cl
                     max_fitness = env.car.get_fitness() if env.car.get_fitness() > max_fitness else max_fitness
                     max_laps = env.car.get_laps() if env.car.get_laps() > max_laps else max_laps
+                    max_distance = env.car.get_distance() if env.car.get_distance() > max_distance else max_distance
 
                     lap_time = env.car.get_lap_time()
                     best_lap_time = lap_time if lap_time < best_lap_time and lap_time != 0 else best_lap_time
@@ -70,13 +75,18 @@ def eval_genomes(genomes, cfg):
                                      (f"Genoms: {start_index + 1}-{end_index}", (10, 40)),
                                      (f"Left in group: {left_in_group}", (10, 70)),
                                      (f"Best lap time: {best_lap_time:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 130)),
+                                     (f"Max Distance: {max_distance:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 130)),
                                      (f"Max CL: {max_cl}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 100)),
                                      (f"Max LAPS: {max_laps}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 70)),
                                      (f"Max Fitness: {max_fitness:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 30)),
                                      (f"Time: {time.time() - start_time:.2f} sec", (SCREEN_WIDTH - 200, 10)),
                                      (f"FPS: {fps} ", (10, SCREEN_HEIGHT - 30)),
                                      ])
-                    screen.draw_network(env.genome, config)
+                    if env.car.get_fitness() > gen_fitness:
+                        gen_fitness = env.car.get_fitness()
+                        best_genome = env.genome
+            if best_genome is not None:
+                screen.draw_network(best_genome, config)
 
             pygame.display.flip()
             clock.tick(FPS)

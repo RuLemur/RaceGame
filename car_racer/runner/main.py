@@ -11,7 +11,7 @@ def run():
     window = Screen()
     clock = pygame.time.Clock()
 
-    car_body = PhyCar(window, car_size=(15, 35))
+    car_body = PhyCar(window, True, car_size=(15, 35))
     # car_body = SimpleCar(window, car_size=(35, 75))
     running = True
     while running:
