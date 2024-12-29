@@ -2,7 +2,6 @@ import math
 import time
 
 import pygame
-from numpy.distutils.extension import fortran_pyf_ext_re
 from shapely.geometry.linestring import LineString
 
 from car_racer.cars.abs_car import Car

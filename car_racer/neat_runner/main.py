@@ -10,7 +10,8 @@ from car_racer.neat_runner.game_instatnse import GameEnvironment
 from car_racer.screen.screen import Screen, SCREEN_WIDTH, SCREEN_HEIGHT
 
 GROUP_SIZE = 10
-FPS = 24
+MAX_VISIBLE = 3
+FPS = 60
 
 generation = 1
 max_fitness: int = 0
@@ -39,8 +40,11 @@ def eval_genomes(genomes, cfg):
         current_group = genomes[start_index:end_index]
 
         # Создайте среду для текущей группы
-        environments = [
-            GameEnvironment(genome, cfg, genome_id, screen) for genome_id, genome in current_group]
+        max_visible = 0
+        environments = []
+        for genome_id, genome in current_group:
+            environments.append(GameEnvironment(genome, cfg, genome_id, screen, max_visible <= MAX_VISIBLE))
+            max_visible += 1
 
         all_environments.extend(environments)
         # Основной цикл симуляции для текущей группы
@@ -53,6 +57,7 @@ def eval_genomes(genomes, cfg):
             screen.draw_track()
             for env in environments:
                 if env.active:
+                    fps = clock.get_fps()
                     env.update()
                     env.render()
                     max_cl = env.car.get_cl() if env.car.get_cl() > max_cl else max_cl
@@ -61,15 +66,17 @@ def eval_genomes(genomes, cfg):
 
                     lap_time = env.car.get_lap_time()
                     best_lap_time = lap_time if lap_time < best_lap_time and lap_time != 0 else best_lap_time
-                screen.draw_all([(f"Generation: {generation}", (10, 10)),
-                                 (f"Genoms: {start_index + 1}-{end_index}", (10, 40)),
-                                 (f"Left in group: {left_in_group}", (10, 70)),
-                                 (f"Best lap time: {best_lap_time:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 130)),
-                                 (f"Max CL: {max_cl}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 100)),
-                                 (f"Max LAPS: {max_laps}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 70)),
-                                 (f"Max Fitness: {max_fitness:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 30)),
-                                 (f"Time: {time.time() - start_time:.2f} sec", (SCREEN_WIDTH-200, 10)),
-                                 ])
+                    screen.draw_all([(f"Generation: {generation}", (10, 10)),
+                                     (f"Genoms: {start_index + 1}-{end_index}", (10, 40)),
+                                     (f"Left in group: {left_in_group}", (10, 70)),
+                                     (f"Best lap time: {best_lap_time:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 130)),
+                                     (f"Max CL: {max_cl}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 100)),
+                                     (f"Max LAPS: {max_laps}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 70)),
+                                     (f"Max Fitness: {max_fitness:.2f}", (SCREEN_WIDTH - 200, SCREEN_HEIGHT - 30)),
+                                     (f"Time: {time.time() - start_time:.2f} sec", (SCREEN_WIDTH - 200, 10)),
+                                     (f"FPS: {fps} ", (10, SCREEN_HEIGHT - 30)),
+                                     ])
+                    screen.draw_network(env.genome, config)
 
             pygame.display.flip()
             clock.tick(FPS)

@@ -24,7 +24,7 @@ BRAKE_RATE = 15
 
 
 class PhyCar(Car):
-    def __init__(self, screen: Screen, car_size):
+    def __init__(self, screen: Screen,visible, car_size ):
         car_image = pygame.image.load("./assets/car.png")
         car_image = pygame.transform.scale(car_image, car_size)
         car_image = pygame.transform.rotate(car_image, -90)
@@ -65,6 +65,7 @@ class PhyCar(Car):
                                            self.body.position.y - self.x // 3,
                                            self.x, self.x)
         self.perpendicular_angle(self.screen.start_line)
+        self.visible = visible
 
 
     def throttle(self, throttle_power):
@@ -121,9 +122,8 @@ class PhyCar(Car):
         self.body.velocity = pymunk.Vec2d(1, 0).rotated(self.body.angle) * self.get_speed()
 
     def draw(self):
-        #     for a in [-140, -90, -30, 0, 30, 90, 140]:
-        #         self.draw_line(a)
-
+        if not self.visible:
+            return
         rotated_image = pygame.transform.rotate(self.car_image, -math.degrees(self.body.angle))
         self.car_rect = rotated_image.get_rect(center=self.body.position)
         if self.draw_speed_vectore:
@@ -135,7 +135,7 @@ class PhyCar(Car):
                 pygame.draw.line(self.screen.get_window(), (0, 0, 255), self.body.position, end_pos_velocity, 3)
 
         self.screen.get_window().blit(rotated_image, self.car_rect.topleft)
-        pygame.draw.rect(self.screen.get_window(), (255, 255, 255), self.collistion_rect)
+        # pygame.draw.rect(self.screen.get_window(), (255, 255, 255), self.collistion_rect)
 
     def _get_max_velocity(self):
         return max(self.body.velocity.x, self.body.velocity.y)
@@ -167,7 +167,8 @@ class PhyCar(Car):
     def draw_line(self, angle: int):
         car_position = self.get_postion()
         line_end_pos = calculate_end_pos(car_position, -math.degrees(self.body.angle) + angle, 500)
-        pygame.draw.line(self.screen.get_window(), GRAY, car_position, line_end_pos, 1)
+        if self.visible:
+            pygame.draw.line(self.screen.get_window(), GRAY, car_position, line_end_pos, 1)
         m_line = LineString([car_position, line_end_pos])
         return m_line
 
@@ -217,7 +218,8 @@ class PhyCar(Car):
                     intersection = main_line.intersection(checked_line)
                     if not intersection.is_empty:
                         distance = min(distance, main_line.project(intersection))
-                        pygame.draw.circle(self.screen.get_window(), WHITE, intersection.coords[0], 3)
+                        if self.visible:
+                            pygame.draw.circle(self.screen.get_window(), WHITE, intersection.coords[0], 3)
             inputs.append(distance)
 
         return inputs

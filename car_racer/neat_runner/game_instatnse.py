@@ -13,13 +13,13 @@ space.gravity = (0, 0)  # Отсутствие гравитации в игре 
 
 
 class GameEnvironment:
-    def __init__(self, genome, config, genome_id, screen):
+    def __init__(self, genome, config, genome_id, screen, visible):
         self.screen = screen
 
         self.genome = genome
         self.network = neat.nn.FeedForwardNetwork.create(genome, config)
         # self.car = SimpleCar(screen, car_size=(35, 75))
-        self.car = PhyCar(screen, car_size=(15, 35))
+        self.car = PhyCar(screen, visible, car_size=(15, 35))
 
         self.genome_id = genome_id
         self.start_time = time.time()
