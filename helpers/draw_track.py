@@ -102,19 +102,15 @@ class Drawer:
                 self.last_pos = event.pos
 
     def draw(self):
-        mouse_pos = pygame.mouse.get_pos()
-
         self.add_bg_image()
 
         save_button_pos = (SCREEN_WIDTH - 100, 10)
         self.draw_button(save_button_pos, "Сохранить")
-        is_save_button_clicked = (save_button_pos[0] <= mouse_pos[0] <= save_button_pos[0] + 100
-                                  and save_button_pos[1] <= mouse_pos[1] <= save_button_pos[1] + 30)
+        save_button_rect = pygame.Rect(*save_button_pos, 90, 30)
 
         end_button_pos = (SCREEN_WIDTH - 100, 45)
         self.draw_button(end_button_pos, "Закончить")
-        is_end_button_clicked = (end_button_pos[0] <= mouse_pos[0] <= end_button_pos[0] + 100
-                                 and end_button_pos[1] <= mouse_pos[1] <= end_button_pos[1] + 30)
+        end_button_rect = pygame.Rect(*end_button_pos, 90, 30)
 
         all_crossed_points = [item for sublist in self.current_points for item in sublist]
         if len(all_crossed_points) > 1:
@@ -124,21 +120,23 @@ class Drawer:
         for lines in self.all_points:
             pygame.draw.lines(self.screen, WHITE, False, lines, 2)
 
-        btn_click = is_save_button_clicked or is_end_button_clicked
         for event in pygame.event.get():
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if btn_click:
-                    if is_save_button_clicked:
-                        if len(self.current_points) > 0:
-                            self.all_points.append([item for sublist in self.current_points for item in sublist])
-                            self.current_points = []
-                            self.step_points = []
-                            self.last_pos = None
-                    elif is_end_button_clicked:
-                        save_points_to_file(self.all_points)
-                        return True
-
+            # Реальный клик ЛКМ по кнопке (не просто наведение курсора на неё
+            # в момент отрисовки кадра, как было раньше - is_save_button_clicked/
+            # is_end_button_clicked считались по текущей позиции мыши ДО цикла
+            # событий, без проверки event.button == 1, так что срабатывали от
+            # любого нажатия мыши, пока курсор просто находился над кнопкой).
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if save_button_rect.collidepoint(event.pos):
+                    if len(self.current_points) > 0:
+                        self.all_points.append([item for sublist in self.current_points for item in sublist])
+                        self.current_points = []
+                        self.step_points = []
+                        self.last_pos = None
                     return False
+                if end_button_rect.collidepoint(event.pos):
+                    save_points_to_file(self.all_points)
+                    return True
 
             self.draw_by_curor(event)
 

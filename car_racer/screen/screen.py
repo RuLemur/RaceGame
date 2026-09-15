@@ -694,7 +694,7 @@ class Screen:
         transparent_surface = pygame.Surface((VIS_WIDTH, VIS_HEIGHT), pygame.SRCALPHA)
 
         # Установите шрифт для отображения текста
-        font =pygame.font.SysFont('Arial', 17, bold=False, italic=False)
+        font = pygame.font.SysFont('Arial', 17, bold=False, italic=False)
 
         # Задайте координаты для слоев
         # layer_positions = []
@@ -761,7 +761,15 @@ class Screen:
         for i, node in enumerate(input_nodes):
             pos = node_positions[node]
             pygame.draw.circle(self.win, (0, 255, 0), pos, NEURON_RADIUS)
-            label_surface = font.render(input_labels[i], True, WHITE)
+            # input_labels собран под текущие 10 входов (num_inputs в
+            # config-feedforward.txt) - сопоставление по индексу остаётся
+            # корректным и при меньшем num_inputs (просто не все подписи
+            # используются), но при БОЛЬШЕМ num_inputs input_labels[i] упал
+            # бы с IndexError - вместо падения или молчаливого расхождения
+            # подписей показываем сам индекс входа, которому не хватило
+            # именованной метки.
+            label = input_labels[i] if i < len(input_labels) else f"in{i}"
+            label_surface = font.render(label, True, WHITE)
             self.win.blit(label_surface, (pos[0] - 60, pos[1] - 10))
 
         for i, node in enumerate(output_nodes):

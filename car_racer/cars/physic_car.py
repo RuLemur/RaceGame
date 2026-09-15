@@ -202,8 +202,17 @@ class PhyCar(Car):
         # рисовать по кэшу, а не сразу внутри get_inputs_for_network().
         self._sensor_debug = []
         self.x, self.y = self.car_size
-        self.collistion_rect = pygame.Rect(self.body.position.x - self.x // 3,
-                                           self.body.position.y - self.x // 3,
+        # Квадрат со стороной = ширина машины (self.x), а не длина (self.y) и
+        # без учёта поворота (body.angle) - грубое, но достаточное для
+        # детекции пересечения линий чекпоинтов/финиша приближение (НЕ для
+        # столкновения со стеной - там отдельный collision_radius по
+        # окружности, см. check_collision_with_track ниже); осознанное
+        # упрощение, трогать форму/размер не нужно. Центр рамки - ровно
+        # body.position (раньше был смещён на -x//3 при стороне x, то есть
+        # несимметрично - например, x=15 давало смещение -5 при половине
+        # стороны 7.5).
+        self.collistion_rect = pygame.Rect(self.body.position.x - self.x / 2,
+                                           self.body.position.y - self.x / 2,
                                            self.x, self.x)
         self.collision_radius = self.x * math.sqrt(2) / 2  # см. check_collision_with_track
         self.perpendicular_angle(self.screen.start_line)
@@ -352,8 +361,8 @@ class PhyCar(Car):
         if self.owns_space:
             self.space.step(1 / TICK_RATE)
         self.tick_count += 1
-        self.collistion_rect = pygame.Rect(self.body.position.x - self.x // 3,
-                                           self.body.position.y - self.x // 3,
+        self.collistion_rect = pygame.Rect(self.body.position.x - self.x / 2,
+                                           self.body.position.y - self.x / 2,
                                            self.x, self.x)
 
         # Вычисляем пройденное расстояние

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 
@@ -224,9 +225,9 @@ def eval_genomes(genomes, cfg):
 
             # Создайте среду для текущей группы
             environments = []
-            for max_visible, (genome_id, genome) in enumerate(current_group):
+            for car_index, (genome_id, genome) in enumerate(current_group):
                 environments.append(GameEnvironment(genome, cfg, genome_id, screen,
-                                                     max_visible <= MAX_VISIBLE, space=group_space))
+                                                     car_index <= MAX_VISIBLE, space=group_space))
 
             # Основной цикл симуляции для текущей группы
             running = True
@@ -650,13 +651,19 @@ if __name__ == "__main__":
     if "pop_size" in initial_settings:
         config.pop_size = initial_settings["pop_size"]
 
-    # Пытаемся загрузить последнюю контрольную точку
+    # Пытаемся загрузить последнюю контрольную точку. Отбираем строго по
+    # имени, которое пишет save_checkpoint() (file_manager/file_worker.py:
+    # f'neat-checkpoint-gen-{generation}.pkl') - раньше брался любой *.pkl в
+    # папке, и посторонний файл (случайно скопированный, из другого проекта,
+    # просто не подходящий под "neat-checkpoint-gen-<N>.pkl") падал с
+    # ValueError/IndexError на f.split('-')[3], а не с понятной ошибкой.
     latest_checkpoint = None
     if os.path.exists(CHECKPOINT_DIR):
-        checkpoints = [f for f in os.listdir(CHECKPOINT_DIR) if f.endswith('.pkl')]
+        checkpoint_pattern = re.compile(r'^neat-checkpoint-gen-(\d+)\.pkl$')
+        checkpoints = [f for f in os.listdir(CHECKPOINT_DIR) if checkpoint_pattern.match(f)]
         if checkpoints:
-            latest_checkpoint = max(checkpoints, key=lambda f: int(f.split('-')[3].split('.')[0]))
-            generation = int(latest_checkpoint.split('-')[3].split('.')[0])
+            latest_checkpoint = max(checkpoints, key=lambda f: int(checkpoint_pattern.match(f).group(1)))
+            generation = int(checkpoint_pattern.match(latest_checkpoint).group(1))
 
     p = load_checkpoint(os.path.join(CHECKPOINT_DIR, latest_checkpoint)) \
         if latest_checkpoint else neat.Population(config)
