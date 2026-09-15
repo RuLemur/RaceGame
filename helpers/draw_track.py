@@ -145,11 +145,11 @@ class Drawer:
         return False
 
     def add_bg_image(self):
-        imp = pygame.image.load("rb_ring.png").convert()
-        imp = pygame.transform.scale(imp, (SCREEN_WIDTH, SCREEN_HEIGHT))
-
-        # Using blit to copy content from one surface to other
-        self.screen.blit(imp, (0, 0))
+        # Раньше здесь грузилась фоновая картинка-подложка (rb_ring.png) для
+        # обрисовки контура по референсу - файла в репозитории нет и не было,
+        # это ломало запуск инструмента сразу на первом кадре. Просто чёрный
+        # фон - функциональность рисования линий мышью от этого не зависит.
+        self.screen.fill(BLACK)
 
 
 if __name__ == "__main__":

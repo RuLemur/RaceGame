@@ -13,8 +13,12 @@ requires-python = ">=3.11"
 dependencies = [
     "pygame==2.6.1",
     "pymunk==7.3.0",
-    "numpy==2.2.1",
+    "numpy==2.2.6",
     "neat-python==2.0.0",
     # только для car_racer/tracks/svg_track_importer.py, см. requirements.txt
     "svgpathtools==1.8.0",
+    # только для car_racer/tracks/build_real_circuits.py, см. requirements.txt
+    "Pillow==11.1.0",
+    "scikit-image==0.25.2",
+    "scipy==1.15.3",
 ]

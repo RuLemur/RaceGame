@@ -3,8 +3,6 @@ import math
 import pygame
 import pymunk
 
-import pymunk.pygame_util
-
 from car_racer.cars.abs_car import Car
 from car_racer.constants import GRAY, WHITE, SENSOR_RANGE, TICK_RATE
 from car_racer.screen.screen import Screen
@@ -198,7 +196,6 @@ class PhyCar(Car):
         self.space.add(body, shape)
 
         self.body = body
-        self.draw_options = pymunk.pygame_util.DrawOptions(self.screen.get_window())
         self.draw_speed_vectore = True
         # Кэш геометрии лучей-сенсоров (мировые координаты), заполняется в
         # get_inputs_for_network() - см. draw_sensors() ниже про то, зачем
@@ -393,8 +390,6 @@ class PhyCar(Car):
         screen_pos = camera.world_to_screen(self.body.position)
         self.car_rect = rotated_image.get_rect(center=screen_pos)
         if self.draw_speed_vectore:
-            # self.space.debug_draw(self.draw_options)
-
             # Отрисовка вектора силы
             if self.body.velocity.length > 0:
                 end_pos_velocity = self.body.position + self.body.velocity.normalized() * self.get_speed()
@@ -403,12 +398,6 @@ class PhyCar(Car):
 
         self.screen.get_window().blit(rotated_image, self.car_rect.topleft)
         # pygame.draw.rect(self.screen.get_window(), (255, 255, 255), self.collistion_rect)
-
-    def _get_max_velocity(self):
-        return max(self.body.velocity.x, self.body.velocity.y)
-
-    def _get_min_velocity(self):
-        return min(self.body.velocity.x, self.body.velocity.y)
 
     def get_lap_time(self):
         return self.best_lap_time

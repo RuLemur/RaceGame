@@ -52,6 +52,11 @@ class GameEnvironment:
         if self.car.check_collision_with_track():
             self.car.cl_count = 0
             self.active = False
+            # Без этого return машина, разбившаяся ровно на чекпоинте/финише,
+            # получала бы +1/+5(+lap-bonus) фитнеса за тот же тик, в котором
+            # она же уже помечена неактивной - авария не должна вознаграждаться
+            # чекпоинтом/кругом, пройденным в момент самой аварии.
+            return
         if self.car.check_collision_with_checkpoint():
             self.car.add_fitness(1)
             self.timeout_ticks += 10 * TICK_RATE

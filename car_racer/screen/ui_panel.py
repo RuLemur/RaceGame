@@ -271,6 +271,18 @@ class TextField:
         self.focused = False
         self._invalid_until = None
 
+    def set_max_value(self, max_value, clamp=True):
+        """Переставить верхнюю границу поля на лету (см. UIPanel про то, как
+        "Видимых машинок" следует за текущим "Размер группы") - не вызывает
+        on_confirm, это не пользовательское подтверждение нового значения, а
+        системная перепривязка допустимого диапазона. Если текущее значение
+        оказалось выше новой границы - подрезает его (clamp=True, дефолт),
+        как обычная валидация, но без красной вспышки "неверный ввод"."""
+        self.max_value = max_value
+        if clamp and max_value is not None and self._last_valid > max_value:
+            self._last_valid = max_value
+            self.text = self._format(self._last_valid)
+
     def _validate(self, text):
         if not text:
             return None
@@ -517,7 +529,7 @@ class UIPanel:
         # active=False - рисуется (дефолт, как было раньше, когда тоглов не
         # существовало вовсе), кнопка предлагает "Hide ..."; клик - скрыто,
         # кнопка предлагает "Show ..." обратно. Гейтят отрисовку лучей-
-        # сенсоров машин (self.show_sensors, читается PhyCar/SimpleCar через
+        # сенсоров машин (self.show_sensors, читается PhyCar через
         # screen.show_sensors - см. CLAUDE.md) и линий чекпоинтов
         # (self.show_track_lines, читается Screen.draw_track) - расчёт
         # сенсоров/сама сетка чекпоинтов НЕ затрагиваются, только отрисовка.
@@ -596,8 +608,8 @@ class UIPanel:
 
         (self.pop_size_field,) = self._add_field_row([
             (self._content_x, self._content_w,
-             dict(label="Pop size\n(после Restart Training)", initial_value=150, min_value=1, max_value=2000,
-                  on_confirm=self._on_pop_size_confirm)),
+             dict(label="Pop size (1-100000)\n(после Restart Training)", initial_value=150, min_value=1,
+                  max_value=100000, on_confirm=self._on_pop_size_confirm)),
         ])
         self._y += FIELD_ROW_GAP
 
@@ -675,6 +687,30 @@ class UIPanel:
 
     def _on_group_size_confirm(self, value):
         self._group_size_changed_to = value
+        self._rebind_max_visible_bound(value)
+
+    def _rebind_max_visible_bound(self, group_size):
+        """"Видимых машинок" физически не может показать больше машин, чем
+        реально бежит одновременно в одной группе (GROUP_SIZE - см.
+        neat_runner/main.py: env.decide()/resolve() гоняются только по
+        current_group текущей группы, max_visible - это индекс внутри неё) -
+        верхняя граница поля следует за текущим "Размер группы", а не
+        зафиксирована числом. Раньше было жёстко 1-30 независимо от размера
+        группы (можно выставить "Размер группы"=300, но "Видимых машинок"
+        всё равно не больше 30) - по запросу пользователя привязано к
+        реальному максимуму. Если текущее значение "Видимых машинок" выше
+        нового (уменьшенного) размера группы - подрезаем его и тем же путём,
+        что и обычное подтверждение поля, сообщаем об этом main.py (иначе
+        подрезалась бы только надпись в поле, а модульная переменная
+        MAX_VISIBLE в neat_runner/main.py осталась бы старой - не ломает
+        симуляцию саму по себе, т.к. индекс и так не может выйти за размер
+        группы, но поле показывало бы одно, а из настроек сохранялось бы
+        другое)."""
+        old_value = self.max_visible_field._last_valid
+        self.max_visible_field.set_max_value(group_size)
+        self.max_visible_field.label = f"Видимых машинок\n(1-{group_size})"
+        if self.max_visible_field._last_valid != old_value:
+            self._max_visible_changed_to = self.max_visible_field._last_valid
 
     def _on_pop_size_confirm(self, value):
         self._pop_size_changed_to = value
@@ -768,10 +804,20 @@ class UIPanel:
         синхронизировать ещё и визуальное состояние кнопки/слайдера, иначе
         подпись кнопки ("Camera Follow" vs "Camera Follow: ON" и т.п.)
         разойдётся с реальным значением атрибута."""
-        if max_visible is not None:
-            self.max_visible_field.set_value(max_visible)
         if group_size is not None:
             self.group_size_field.set_value(group_size)
+            # Граница "Видимых машинок" привязана к размеру группы (см.
+            # _rebind_max_visible_bound) - переставляем ДО применения
+            # max_visible ниже, иначе он бы затёрся следующим set_value.
+            self._rebind_max_visible_bound(group_size)
+        if max_visible is not None:
+            # set_value не валидирует диапазон (см. её докстринг) - на
+            # случай, если сохранённый max_visible старше сохранённого
+            # group_size (из старого user_settings.json с другим размером
+            # группы), подрезаем явно, а не полагаемся на пере-подтверждение
+            # пользователем.
+            bound = self.max_visible_field.max_value
+            self.max_visible_field.set_value(min(max_visible, bound) if bound is not None else max_visible)
         if pop_size is not None:
             self.pop_size_field.set_value(pop_size)
         if fps is not None:
@@ -809,7 +855,15 @@ class UIPanel:
         consumed = False
 
         if event.type == pygame.MOUSEWHEEL and self.max_scroll > 0:
-            mouse_pos = pygame.mouse.get_pos()
+            # event.pos приходит уже в логических координатах холста (см.
+            # main.py - MOUSEWHEEL сам по себе не несёт .pos, но вызывающий
+            # код переводит pygame.mouse.get_pos() в логические координаты и
+            # прикладывает их к событию перед handle_event). self.rect тоже
+            # в логических координатах - раньше здесь читался
+            # pygame.mouse.get_pos() напрямую (пиксели РЕАЛЬНОГО окна), что
+            # ломало обнаружение скролла на любом окне меньше логического
+            # холста (типичный случай - см. Screen.initial_scale).
+            mouse_pos = event.pos
             if self.rect.collidepoint(mouse_pos):
                 # event.y > 0 - колесо "от себя" (вверх) - как в браузере/
                 # большинстве интерфейсов, скроллит контент ВВЕРХ (offset

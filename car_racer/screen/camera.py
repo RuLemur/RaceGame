@@ -6,7 +6,7 @@
 `cast_ray`, границы `screen.screen_width/screen.screen_height`) камеру не
 знают и не должны знать - трансформация применяется только непосредственно
 перед вызовами `pygame.draw.*`/`Surface.blit` в рисующих методах Screen и
-машин (car_racer/cars/{physic_car,simplecar}.py::draw()/draw_line()/
+машин (car_racer/cars/physic_car.py::draw()/draw_line()/
 get_inputs_for_network()).
 
 Это отдельный, более "нижний" уровень, чем letterbox-масштабирование всего

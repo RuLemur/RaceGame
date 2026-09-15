@@ -134,7 +134,7 @@ def _maybe_save_settings(screen, panel, cfg):
 
 def eval_genomes(genomes, cfg):
     global generation, max_fitness, max_cl, max_laps, best_lap_time, max_distance
-    global current_track_file, screen, MAX_VISIBLE, GROUP_SIZE, FPS
+    global current_track_file, screen, MAX_VISIBLE, GROUP_SIZE, FPS, p
     global _camera_drag_active, _camera_drag_last_pos, _camera_manual_pan
 
     if screen is None:
@@ -245,6 +245,18 @@ def eval_genomes(genomes, cfg):
                     if hasattr(event, "pos"):
                         logical_pos = screen.window_to_logical(event.pos)
                         event = pygame.event.Event(event.type, dict(event.dict, pos=logical_pos))
+                    elif event.type == pygame.MOUSEWHEEL:
+                        # MOUSEWHEEL не несёт event.pos (см. комментарий в
+                        # ui_panel.py) - панель определяет, над ней ли курсор,
+                        # через pygame.mouse.get_pos(), который возвращает
+                        # пиксели РЕАЛЬНОГО окна, а панель расположена в
+                        # логических координатах холста. Без этого пересчёта
+                        # (совпадает с веткой выше для событий с .pos)
+                        # скролл панели ломался бы на любом окне, отличном по
+                        # размеру от логического холста (то есть почти всегда
+                        # - см. Screen.initial_scale).
+                        logical_pos = screen.window_to_logical(pygame.mouse.get_pos())
+                        event = pygame.event.Event(event.type, dict(event.dict, pos=logical_pos))
                     consumed = panel.handle_event(event)
 
                     # Ручное панорамирование камеры - drag ЛКМ по игровому
@@ -283,9 +295,7 @@ def eval_genomes(genomes, cfg):
                         # ощутимый шаг зума и на минимальном, и на
                         # максимальном zoom. event.y > 0 - скролл "от себя"/
                         # вверх - приближение, как в большинстве карт.
-                        mouse_pos = pygame.mouse.get_pos()
-                        logical_mouse = screen.window_to_logical(mouse_pos)
-                        if logical_mouse[0] < screen.screen_width:
+                        if event.pos[0] < screen.screen_width:
                             # panel.sync_initial_values сама зажимает
                             # zoom_slider.value в [min,max] слайдера, но НЕ
                             # panel.zoom (простое поле, используется прямо в
@@ -301,7 +311,7 @@ def eval_genomes(genomes, cfg):
 
                 # Continuous-атрибуты (как panel.paused/panel.camera_follow) -
                 # синхронизируем на Screen КАЖДЫЙ тик, а не только в блоке
-                # should_render ниже: PhyCar/SimpleCar читают screen.show_sensors
+                # should_render ниже: PhyCar читает screen.show_sensors
                 # внутри get_inputs_for_network()/draw_line(), которые
                 # вызываются из env.decide() безусловно (каждый тик, не
                 # только когда рисуется кадр) - см. CLAUDE.md про то, что это

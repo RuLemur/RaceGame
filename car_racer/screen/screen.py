@@ -183,7 +183,7 @@ class Screen:
 
         self.texts: dict[str, tuple[str, tuple[int, int]]] = {}
 
-        # Гейты видимости, читаемые PhyCar/SimpleCar (через self.screen) и
+        # Гейты видимости, читаемые PhyCar (через self.screen) и
         # draw_track() - см. CLAUDE.md про "Show sensor rays"/"Show track
         # lines" в UI-панели. Живут на Screen (а не только на panel), чтобы
         # машины могли проверять их даже если бы панели не было (with_panel=
@@ -207,14 +207,6 @@ class Screen:
         # от track_outer/track_inner ТЕКУЩЕЙ трассы - инвалидируется (сбросом
         # в None) в load_track() при переключении трассы.
         self._track_fill_texture = None
-        # Кэш РЕЗУЛЬТАТА pygame.transform.scale той же текстуры под
-        # ПОСЛЕДНИЙ использованный cam.zoom (см. _draw_track_fill) -
-        # zoom обычно не меняется каждый кадр (слайдер/колесо мыши трогают
-        # редко относительно частоты кадров, особенно в Unlimited FPS), а
-        # позиция (cam.center) меняется почти всегда (Camera Follow) - так
-        # что дорогое масштабирование пересчитывается только когда zoom
-        # реально изменился, а не на каждый кадр с тем же zoom.
-        self._track_fill_scaled_cache = None  # (zoom, scaled_surface) или None
 
         self.panel = UIPanel(self.screen_width, self.screen_height,
                               panel_width=self.panel_width, initial_track=track_file) if with_panel else None
@@ -280,13 +272,12 @@ class Screen:
         # СТАРЫЙ track_outer/track_inner - обязательно инвалидировать здесь,
         # иначе после переключения трассы рисовалось бы полотно предыдущей.
         self._track_fill_texture = None
-        self._track_fill_scaled_cache = None
 
     def _recompute_world_bounds(self, margin=WORLD_BOUNDS_MARGIN):
         """Прямоугольник "мира" (min_x, min_y, max_x, max_y) — bounding box
         ЭТОЙ трассы (track_outer + track_inner) плюс запас `margin` со всех
         сторон. Это ВТОРОЙ, грубый backstop-барьер выхода за пределы
-        (см. PhyCar/SimpleCar.check_collision_with_track) — основная проверка
+        (см. PhyCar.check_collision_with_track) — основная проверка
         "разбился о стену" (min_distance_to_segments, расстояние до реального
         полотна) не связана с этим прямоугольником и не отменяется им; этот
         прямоугольник нужен только чтобы отловить машину, которая каким-то
@@ -522,34 +513,70 @@ class Screen:
         return surf, (min_x, min_y), scale
 
     def _draw_track_fill(self, cam):
-        """Масштабирует и блитит закэшированную текстуру полотна (см.
-        _build_track_fill_texture) под текущую камеру - см. пояснение там же
-        про то, почему масштабирование готовой картинки эквивалентно
-        перерисовке полигона под новую камеру для афинных преобразований.
+        """Кадрирует под видимую область экрана и масштабирует закэшированную
+        текстуру полотна (см. _build_track_fill_texture) под текущую камеру -
+        см. пояснение там же про то, почему масштабирование готовой картинки
+        эквивалентно перерисовке полигона под новую камеру для афинных
+        преобразований.
 
-        pygame.transform.scale САМ по себе не бесплатен (пропорционален
-        числу пикселей результата) - раз он не меняется, пока не меняется
-        cam.zoom (позиция/pan на него не влияет, только на точку блита ниже),
-        кэшируем его РЕЗУЛЬТАТ под конкретный zoom (self._track_fill_scaled_cache)
-        и пересчитываем только когда zoom реально изменился - на большинстве
-        кадров (zoom стабилен между движениями слайдера/колеса мыши) это
-        сводит стоимость до одного дешёвого blit."""
+        ВАЖНО (вылет при близком зуме, был реальным багом): раньше под
+        cam.zoom масштабировалась ВСЯ текстура целиком, независимо от того,
+        видна ли вся трасса на экране. Текстура снижена до
+        TRACK_FILL_CACHE_MAX_DIM=2048px по большей стороне (см.
+        _build_track_fill_texture), но у огромных трасс (points_monza.txt/
+        points_imola.txt, bbox ~29000x33000/~36600x19300px) даже
+        умеренное приближение камеры требовало результирующей Surface на
+        ДЕСЯТКИ ТЫСЯЧ пикселей по стороне: для Монцы у MAX_ZOOM=2.5 -
+        около 72000x82000px, это ~24 ГБ на один RGB-кадр (32-бит) - гарантированный
+        вылет (MemoryError/SDL out of memory) при попытке приблизить камеру
+        именно на этих трассах (на маленьких трассах текстура и так меньше
+        экрана, поэтому баг не проявлялся). Экран физически не может
+        показать больше пикселей, чем в самом игровом поле
+        (screen_width x screen_height) - масштабировать нужно ТОЛЬКО ту
+        часть текстуры, которая реально попадает в кадр, а не текстуру
+        целиком. `cam.screen_to_world` переводит углы видимой области в
+        мировые координаты, дальше та же линейная калибровка, что и при
+        постройке текстуры (`(мировая_точка - origin) * cache_scale`),
+        переводит их в пиксели текстуры - обрезаем текстуру по этому
+        прямоугольнику (`Surface.subsurface`, дешёвая view без копирования)
+        ДО масштабирования. Результат масштабирования теперь всегда
+        ограничен размером игрового поля независимо от zoom и размера
+        трассы - кэш РЕЗУЛЬТАТА по zoom (был раньше) больше не нужен: сама
+        операция уже ограничена по стоимости размером экрана на каждый
+        кадр (тот же порядок величины, что у _grass_texture ниже, который
+        и так блитится каждый кадр без кэша результата)."""
         if self._track_fill_texture is None:
             self._track_fill_texture = self._build_track_fill_texture()
         if self._track_fill_texture is None:
             return
         texture, (origin_x, origin_y), cache_scale = self._track_fill_texture
+        tex_w, tex_h = texture.get_size()
 
-        if self._track_fill_scaled_cache is not None and self._track_fill_scaled_cache[0] == cam.zoom:
-            scaled_texture = self._track_fill_scaled_cache[1]
-        else:
-            draw_scale = cam.zoom / cache_scale
-            scaled_w = max(1, round(texture.get_width() * draw_scale))
-            scaled_h = max(1, round(texture.get_height() * draw_scale))
-            scaled_texture = pygame.transform.scale(texture, (scaled_w, scaled_h))
-            self._track_fill_scaled_cache = (cam.zoom, scaled_texture)
+        world_top_left = cam.screen_to_world((0, 0))
+        world_bottom_right = cam.screen_to_world((self.screen_width, self.screen_height))
+        tex_x0 = (world_top_left[0] - origin_x) * cache_scale
+        tex_y0 = (world_top_left[1] - origin_y) * cache_scale
+        tex_x1 = (world_bottom_right[0] - origin_x) * cache_scale
+        tex_y1 = (world_bottom_right[1] - origin_y) * cache_scale
 
-        top_left = cam.world_to_screen((origin_x, origin_y))
+        crop_x0 = max(0, math.floor(min(tex_x0, tex_x1)))
+        crop_y0 = max(0, math.floor(min(tex_y0, tex_y1)))
+        crop_x1 = min(tex_w, math.ceil(max(tex_x0, tex_x1)))
+        crop_y1 = min(tex_h, math.ceil(max(tex_y0, tex_y1)))
+        crop_w = crop_x1 - crop_x0
+        crop_h = crop_y1 - crop_y0
+        if crop_w <= 0 or crop_h <= 0:
+            return  # видимая область экрана не пересекается с текстурой трассы вообще
+
+        cropped = texture.subsurface((crop_x0, crop_y0, crop_w, crop_h))
+
+        draw_scale = cam.zoom / cache_scale
+        scaled_w = max(1, round(crop_w * draw_scale))
+        scaled_h = max(1, round(crop_h * draw_scale))
+        scaled_texture = pygame.transform.scale(cropped, (scaled_w, scaled_h))
+
+        crop_world_origin = (origin_x + crop_x0 / cache_scale, origin_y + crop_y0 / cache_scale)
+        top_left = cam.world_to_screen(crop_world_origin)
         self.win.blit(scaled_texture, top_left)
 
     def _draw_start_checkers(self, cam):

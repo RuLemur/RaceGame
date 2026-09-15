@@ -20,7 +20,13 @@
 # helpers/calculate.py::cast_ray - тот же результат, без shapely/GEOS.
 pygame==2.6.1
 pymunk==7.3.0
-numpy==2.2.1
+# Было 2.2.1 - поднято до фактически установленной 2.2.6 (её подтянула как
+# транзитивную зависимость установка scikit-image ниже; откатывать её
+# обратно ради совпадения с этим файлом смысла не было - 2.2.6 проверена тем
+# же способом, что и остальные мажорные/минорные апгрейды в этом проекте, см.
+# CLAUDE.md: headless прогон Screen/GameEnvironment по всем трассам без
+# ошибок).
+numpy==2.2.6
 neat-python==2.0.0
 
 # svgpathtools - только для car_racer/tracks/svg_track_importer.py (разовый
@@ -31,3 +37,13 @@ neat-python==2.0.0
 # растеризации. Тянет за собой scipy и svgwrite (транзитивные зависимости
 # самого svgpathtools, не используются напрямую).
 svgpathtools==1.8.0
+
+# Pillow/scikit-image/scipy - только для car_racer/tracks/build_real_circuits.py
+# (разовая оцифровка растровой схемы Имолы: альфа-композитинг на белый фон,
+# бинаризация, skeletonize, binary_closing - см. docstring модуля), тоже не
+# используются в игровом рантайме. Раньше не были объявлены здесь вовсе -
+# `python -m car_racer.tracks.build_real_circuits` падал с ImportError на
+# сборке Имолы (Монца собирается раньше и не задевает эти три пакета).
+Pillow==11.1.0
+scikit-image==0.25.2
+scipy==1.15.3
