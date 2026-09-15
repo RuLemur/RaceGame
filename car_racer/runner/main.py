@@ -18,6 +18,8 @@ def run():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.VIDEORESIZE:
+                window.handle_resize(event)
 
         window.draw_track()
         keys = pygame.key.get_pressed()
@@ -44,7 +46,7 @@ def run():
         # Отрисовка
         car_body.draw()
 
-        pygame.display.flip()
+        window.present()
         clock.tick(60)
 
     pygame.quit()

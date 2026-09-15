@@ -166,3 +166,7 @@ cython_debug/
 /car_racer/checkpoints/checkpoints/
 /car_racer/checkpoints/good_games/
 /car_racer/checkpoints/
+
+# Автосохранённые настройки конкретного запуска (окно/панель) - персональный
+# рантайм-файл, как и чекпоинты, см. car_racer/file_manager/settings_store.py
+/car_racer/config/user_settings.json

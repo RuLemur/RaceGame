@@ -3,6 +3,8 @@
 fitness_criterion     = max
 # пороговое значение фитнеса для завершения обучения
 fitness_threshold     = 200000
+# не останавливать обучение по достижении fitness_threshold (обучаем бесконечно)
+no_fitness_termination = False
 # размер популяции
 pop_size              = 300
 # сброс популяции при вымирании всех видов
@@ -10,7 +12,7 @@ reset_on_extinction   = true
 
 [DefaultGenome]
 # количество входов и выходов сети
-num_inputs            = 9
+num_inputs            = 10
 num_outputs           = 2
 # количество скрытых нейронов
 num_hidden            = 4
@@ -19,7 +21,7 @@ initial_connection    = full_nodirect
 # активация функции
 activation_default    = tanh
 activation_mutate_rate  = 0.1
-activation_options    = sigmoid
+activation_options    = tanh sigmoid
 # функция объединения
 aggregation_default   = sum
 aggregation_mutate_rate = 0.1
@@ -48,13 +50,13 @@ node_delete_prob      = 0.1
 feed_forward = true
 compatibility_disjoint_coefficient = 0.1
 compatibility_weight_coefficient = 0.1
-bias_init_mean = 0.1
+bias_init_mean = 0.0
 bias_init_stdev = 0.1
 bias_replace_rate = 0.1
 bias_mutate_rate = 0.1
 bias_mutate_power = 0.1
 bias_max_value = 1
-bias_min_value = 0
+bias_min_value = -1
 response_init_mean      = 1.0
 response_init_stdev     = 0.1
 response_replace_rate   = 0.1

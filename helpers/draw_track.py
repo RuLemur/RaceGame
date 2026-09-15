@@ -1,5 +1,9 @@
-import pygame
+import os
 import sys
+
+import pygame
+
+from car_racer.file_manager.file_worker import POINTS_DIR
 
 SCREEN_HEIGHT = 1200
 
@@ -12,7 +16,8 @@ BUTTON_HOVER_COLOR = (150, 150, 250)
 
 
 def save_points_to_file(points, filename="points.txt"):
-    with open(filename, "w") as file:
+    path = os.path.join(POINTS_DIR, filename)
+    with open(path, "w") as file:
         for point in points:
             points_string = "["
             for p in point:
@@ -113,11 +118,11 @@ class Drawer:
 
         all_crossed_points = [item for sublist in self.current_points for item in sublist]
         if len(all_crossed_points) > 1:
-            pygame.draw.lines(screen, WHITE, False, all_crossed_points, 2)
+            pygame.draw.lines(self.screen, WHITE, False, all_crossed_points, 2)
         if len(self.step_points) > 1:
-            pygame.draw.lines(screen, WHITE, False, self.step_points, 2)
+            pygame.draw.lines(self.screen, WHITE, False, self.step_points, 2)
         for lines in self.all_points:
-            pygame.draw.lines(screen, WHITE, False, lines, 2)
+            pygame.draw.lines(self.screen, WHITE, False, lines, 2)
 
         btn_click = is_save_button_clicked or is_end_button_clicked
         for event in pygame.event.get():

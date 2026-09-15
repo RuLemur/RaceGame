@@ -3,13 +3,18 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rater_env"]
+packages = ["car_racer", "helpers"]
 
 [project]
-name = "rater_env"
-version = "0.0.1"
+name = "race-game"
+version = "0.1.0"
+description = "Игра-симулятор гонок, в которой машинка учится ездить сама через NEAT (нейроэволюция)"
+requires-python = ">=3.11"
 dependencies = [
-  "gymnasium",
-  "pygame>=2.1.3",
-  "pre-commit",
+    "pygame==2.6.1",
+    "pymunk==7.3.0",
+    "numpy==2.2.1",
+    "neat-python==2.0.0",
+    # только для car_racer/tracks/svg_track_importer.py, см. requirements.txt
+    "svgpathtools==1.8.0",
 ]

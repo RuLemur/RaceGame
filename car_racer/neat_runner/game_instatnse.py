@@ -1,70 +1,70 @@
-import time
-
 import neat
-import pymunk.pygame_util
 
 from car_racer.cars.physic_car import PhyCar
-from car_racer.cars.simplecar import SimpleCar
-from car_racer.constants import TIMEOUT, MAX_TIMEOUT
-
-# Инициализация Pymunk
-space = pymunk.Space()
-space.gravity = (0, 0)  # Отсутствие гравитации в игре с видом сверху
+from car_racer.constants import TIMEOUT, MAX_TIMEOUT, TICK_RATE
 
 
 class GameEnvironment:
-    def __init__(self, genome, config, genome_id, screen, visible):
+    def __init__(self, genome, config, genome_id, screen, visible, space=None):
         self.screen = screen
 
         self.genome = genome
         self.network = neat.nn.FeedForwardNetwork.create(genome, config)
-        # self.car = SimpleCar(screen, car_size=(35, 75))
-        self.car = PhyCar(screen, visible, car_size=(15, 35))
+        self.car = PhyCar(screen, visible, car_size=(15, 35), space=space)
 
         self.genome_id = genome_id
-        self.start_time = time.time()
-        self.timeout = TIMEOUT
+        self.ticks_elapsed = 0
+        self.timeout_ticks = TIMEOUT * TICK_RATE
+        self.max_timeout_ticks = MAX_TIMEOUT * TICK_RATE
         self.active = True
 
-    def update(self):
-        elapsed_time = self.timeout - (time.time() - self.start_time)
-        if elapsed_time <= 0 or not self.active:
-            self.active = False
+    def decide(self):
+        """Считать сенсоры, прогнать сеть, применить газ/руль. Физику не
+        шагает - для группы это делает один общий pymunk.Space снаружи, один
+        раз на весь тик (см. car_racer/neat_runner/main.py: decide() для всех
+        машин -> space.step() -> resolve() для всех машин)."""
+        if not self.active:
             return
-        if time.time() - self.start_time > MAX_TIMEOUT:
+        if self.ticks_elapsed >= self.timeout_ticks or self.ticks_elapsed >= self.max_timeout_ticks:
+            # Та же "утешительная" премия за пройденную дистанцию, что и при
+            # столкновении со стеной (см. PhyCar.add_distance_consolation_fitness)
+            # - раньше эпизод, закончившийся по таймауту (а не аварией),
+            # вообще не получал этот бонус, хотя мог пройти ту же дистанцию:
+            # эволюция не отличала "долго аккуратно ехал, но не успел" от
+            # "стоял на месте всю дорогу".
+            self.car.add_distance_consolation_fitness()
             self.active = False
             return
 
-        # Получение входных данных для нейросети
         inputs = self.car.get_inputs_for_network()
-
-        # Получение выходных данных от нейросети
         output = self.network.activate(inputs)
+        self.car.throttle(output[0])
+        self.car.turn(output[1])
 
-        # Управление автомобилем на основе выходов сети
-        if output[0] > 0.5:
-            self.car.throttle(output[0])
-        if output[0] < -0.5:
-            self.car.throttle(output[0])
-        if output[1] > 0.5:
-            self.car.turn(output[1])
-        elif output[1] < -0.5:
-            self.car.turn(output[1])
-
-        # Обновление машины
+    def resolve(self):
+        """Вызывать после шага общего Space: обновить состояние машины и
+        проверить столкновения/чекпоинты/фитнес за этот тик."""
+        if not self.active:
+            return
+        self.ticks_elapsed += 1
         self.car.update()
 
-        # Проверка столкновений и обновление фитнеса
         if self.car.check_collision_with_track():
             self.car.cl_count = 0
             self.active = False
         if self.car.check_collision_with_checkpoint():
             self.car.add_fitness(1)
-            self.timeout += 10
+            self.timeout_ticks += 10 * TICK_RATE
         if self.car.check_collision_with_start():
             self.car.add_fitness(5)
             if self.car.get_lap_time() > 0:
                 self.car.add_fitness(20 / self.car.get_lap_time())
+
+    def update(self):
+        """decide() + resolve() одним вызовом - для одиночного использования
+        без общего Space (тогда car.update() сам шагнёт свою физику)."""
+        self.decide()
+        self.resolve()
 
     def render(self):
         self.car.draw()

@@ -1,0 +1,33 @@
+# Прямые зависимости проекта. Версии зафиксированы для воспроизводимости,
+# все — актуальные на момент написания (проверено через `pip index versions`).
+#
+# neat-python 2.0.0 требует пары правок в конфиге, которых не было в 0.92 -
+# они уже внесены в car_racer/config/config-feedforward.txt:
+#   - добавлен обязательный параметр no_fitness_termination
+#   - activation_options приведён в соответствие с activation_default (tanh)
+# Старые чекпоинты (car_racer/checkpoints/checkpoints/*.pkl) с этой версией
+# несовместимы - но их и не нужно было сохранять, они удалены.
+#
+# pymunk 7.x переписал Vec2d в неизменяемый NamedTuple и поменял поведение
+# pymunk.pygame_util - проверено вручную, что весь API, который использует
+# car_racer/cars/physic_car.py (Vec2d/.rotated()/.normalized(), Body, Space,
+# Poly, DrawOptions), по-прежнему работает как раньше.
+#
+# shapely убран: сенсоры машин раньше считали пересечение лучей со стенами
+# через shapely.LineString (самое дорогое место в тике обучения - создание
+# Python-объектов геометрии на каждый сегмент трассы на каждый луч на каждую
+# машину). Заменено на ручной векторизованный (numpy) рейкастинг в
+# helpers/calculate.py::cast_ray - тот же результат, без shapely/GEOS.
+pygame==2.6.1
+pymunk==7.3.0
+numpy==2.2.1
+neat-python==2.0.0
+
+# svgpathtools - только для car_racer/tracks/svg_track_importer.py (разовый
+# оффлайн-импорт трассы из векторной схемы в формат points*.txt), в игровом
+# рантайме не используется. Pure Python, не требует cairo/GTK - в отличие от
+# cairosvg/svglib, которые рассматривались для рендера SVG в растр, но не
+# понадобились: geometry полотна трассы вытащена напрямую из <path> без
+# растеризации. Тянет за собой scipy и svgwrite (транзитивные зависимости
+# самого svgpathtools, не используются напрямую).
+svgpathtools==1.8.0
