@@ -4,96 +4,62 @@ import pygame
 import pymunk
 
 from car_racer.cars.abs_car import Car
-from car_racer.constants import GRAY, WHITE, SENSOR_RANGE, TICK_RATE
+from car_racer.constants import GRAY, WHITE, SENSOR_RANGE, TICK_RATE, PX_PER_METER
 from car_racer.screen.screen import Screen
 from helpers.calculate import calculate_end_pos, get_midpoint, cast_ray, min_distance_to_segments
 
 CAR_HEIGHT = 80
 CAR_WIDTH = 50
 VELOCITY_EPSILON = 0.1
-ROTATE_POWER = 3.0  # Сила поворота
+ROTATE_POWER = 3.0  # жёсткий потолок угловой скорости, rad/s (страховка, реально почти не достигается)
 THROTTLE_POWER = 200  # Сила тяги
-MAX_SPEED = 400  # Установи подходящее значение
-SPEED_EFFECT = 0.3  # Чем больше значение, тем меньше поворот на высокой скорости
-ACCELERATION_RATE = 0.2
+MAX_SPEED = 400  # px/s
 BRAKE_RATE = 15
 
-# --- Модель сцепления (круг трения), приближение картинга на асфальте ------
-# Раньше throttle() и turn() были полностью независимы: сеть могла жать газ в
-# пол ровно в середине шпильки без всякого штрафа. У реального картинга на
-# асфальте доступное сцепление шин ограничивает СУММУ продольного (разгон/
-# торможение) и поперечного (поворот) ускорения - выжать оба на максимум
+# --- Руль: угол передних колёс вместо прямой угловой скорости --------------
+# Раньше turn() задавал ЦЕЛЕВУЮ угловую скорость напрямую, плюс ручная
+# поправка SPEED_EFFECT на скорость. Теперь руль - это угол δ передних колёс,
+# а угловая скорость выводится из скорости и δ по кинематике велосипеда:
+#     ω = v / WHEELBASE * tan(δ)
+# Отсюда САМО следует то, что раньше имитировалось вручную: машина не
+# вращается на месте (ω → 0 при v → 0), а боковое ускорение a = v·ω
+# ограничивается сцеплением (см. GRIP_ACCEL ниже) - поэтому на высокой
+# скорости руль естественно "слабее".
+MAX_STEERING_ANGLE = 0.6   # макс. угол передних колёс, rad (~34°) - задаёт мин. радиус поворота
+STEERING_RATE = 6.0        # конечная скорость поворота руля, rad/s - turn() не может "дёрнуть" мгновенно
+WHEELBASE = 30.0           # база между осями, px (~1.5 м при PX_PER_METER=20)
+
+# --- Модель сцепления (круг трения) ----------------------------------------
+# Доступное сцепление шин ограничивает СУММУ продольного (разгон/торможение)
+# и поперечного (поворот) ускорения: жать газ в пол и резко поворачивать
 # одновременно физически нельзя.
 #
-# GRIP_ACCEL - условный бюджет доступного ускорения в px/s^2 (единой
-# калибровки px->метры в проекте нет нигде). Подобран НЕ как попало: старая
-# лаг-модель разгона (ACCELERATION_RATE) сама по себе даёт пиковое продольное
-# ускорение ~2400 px/s^2 при большом рассогласовании скоростей (например,
-# полный газ с полной остановки) - если взять GRIP_ACCEL заметно меньше этого,
-# круг трения душит вообще любой резкий разгон по прямой, даже без поворота,
-# что не про сцепление, а просто урезает динамику. 2000 выбрано так, чтобы:
-# чистый разгон по прямой почти не подрезался (кроме самого первого тика от
-# полной остановки - разумный аналог пробуксовки), чистый поворот на макс.
-# скорости (до ~1200 px/s^2 при ROTATE_POWER=3 и MAX_SPEED=400) не подрезался
-# вовсе, а вот КОМБИНАЦИЯ жёсткого газа и жёсткого руля (особенно на выходе
-# из медленного поворота) - заметно ограничивается, что и есть нужный эффект.
-#
-# GRIP_ACCEL_PER_G - чисто для отображения в UI-настройках в узнаваемых "g"
-# (стандартный автоспортивный термин: "машина держит 1.5g в повороте"), а не
-# в голом px/s^2. Подобрано так, чтобы дефолтные 2000 px/s^2 показывались как
-# 1.5g (правдоподобное значение для картинга на асфальте) - это ЭТИКЕТКА для
-# слайдера, а не независимая калибровка px->метры (её как не было, так и нет).
-GRIP_ACCEL = 2000.0
-GRIP_ACCEL_PER_G = GRIP_ACCEL / 1.5
+# Раньше GRIP_ACCEL=2000 px/s^2 было УСЛОВНОЙ этикеткой (~10g при
+# PX_PER_METER=20), подобранной под старую лаг-модель разгона, а не под
+# физику. Теперь это честная калибровка через PX_PER_METER:
+# GRIP_ACCEL_PER_G = 1g в px/s^2 (g=9.81 м/с^2, 1 м = PX_PER_METER px),
+# GRIP_ACCEL = 1.5g - правдоподобный предел сцепления картинга на асфальте.
+# Побочный эффект (осознанный): теперь круг трения ограничивает и разгон по
+# прямой (~1.5g "пробуксовки" при старте), и торможение - раньше он их почти
+# не трогал, отдавая весь бюджет продольному ускорению.
+GRIP_ACCEL_PER_G = 9.81 * PX_PER_METER
+GRIP_ACCEL = 1.5 * GRIP_ACCEL_PER_G
 
-# Картинг ездит на "спуле" - жёсткой задней оси без дифференциала: в повороте
-# внутреннее заднее колесо вынуждено либо проскальзывать, либо подвисать,
-# из-за чего крутые повороты на малой скорости даются заметно хуже, чем на
-# ходу (в отличие от машины с дифференциалом). Ниже порога скорости
-# эффективность руля дополнительно падает, линейно доходя до минимума на
-# нулевой скорости.
-NO_DIFF_SPEED_THRESHOLD = 60.0
-NO_DIFF_MIN_EFFECTIVENESS = 0.4
-
-# --- Снос/занос/скраб от РЕЗКИХ воздействий ------------------------------
-# Три эффекта поверх круга трения выше - каждый реагирует на то, НАСКОЛЬКО
-# РЕЗКО (не просто насколько сильно) меняется газ/руль между тиками,
-# приближая поведение на пределе сцепления к реальному вместо простого
-# "меньше скорости/поворота при том же запросе".
-
-# 1) Снос (understeer): резкий скачок руля за один тик снижает эффективность
-# поворота именно НА ЭТОТ тик - передние шины не успевают "зацепиться" за
-# новый угол, руль воспринимается смазанно, машина продолжает по кривой шире
-# скомандованной. UNDERSTEER_RATE_THRESHOLD - скачок |Δturn_power| за тик
-# (сеть отдаёт примерно [-1, 1]), после которого эффект выходит на максимум;
-# UNDERSTEER_MIN_EFFECTIVENESS - до какой доли падает эффективность руля при
-# самом резком скачке (по аналогии с NO_DIFF_MIN_EFFECTIVENESS выше).
-UNDERSTEER_RATE_THRESHOLD = 1.0
-UNDERSTEER_MIN_EFFECTIVENESS = 0.4
-
-# 2) Занос (oversteer): резкий скачок ГАЗА при уже ненулевой угловой скорости
-# (машина уже в повороте) добавляет ЛИШНЕЕ вращение В ТУ ЖЕ СТОРОНУ поверх
-# того, что просил руль - задняя ось теряет сцепление под тягой. В отличие
-# от круга трения этот довесок НЕ ограничен GRIP_ACCEL (это и есть потеря
-# сцепления, а не законный манёвр в его пределах) - только общим потолком
-# ROTATE_POWER в конце _apply_controls. OVERSTEER_MIN_ANGULAR - порог текущей
-# угловой скорости, ниже которого считаем "едем прямо" и занос не запускаем
-# (иначе резкий старт с места давал бы случайный спин на пустом месте).
-# OVERSTEER_THROTTLE_THRESHOLD - на сколько должен скакнуть газ за тик,
-# прежде чем начнётся занос. OVERSTEER_STRENGTH - сила эффекта.
-OVERSTEER_MIN_ANGULAR = 0.3
-OVERSTEER_THROTTLE_THRESHOLD = 0.3
-OVERSTEER_STRENGTH = 2.0
-
-# 3) Скраб: поворот сам по себе гасит скорость (сцепление уходит не только в
-# поперечное ускорение, но и в потерю хода), даже В ПРЕДЕЛАХ бюджета круга
-# трения - раньше манёвр "внутри лимита" вообще не стоил скорости, что
-# физически неверно (гоночная линия существует именно потому, что скорость в
-# повороте теряется). STEER_SCRUB_COEFF подобран, чтобы на близком к
-# максимуму руле и высокой скорости скраб был заметным (~8-9%/с при
-# непрерывном руле в пол на макс. скорости), но не превращал каждый поворот
-# в остановку.
-STEER_SCRUB_COEFF = 0.03
+# --- Снос (slip): вектор скорости не успевает за курсом --------------------
+# Раньше velocity каждый тик жёстко проецировалась на курс (self.body.angle) -
+# машина ехала "по рельсам", бокового скольжения не существовало в принципе,
+# а снос/занос/скраб имитировались ручными "киками" (UNDERSTEER_*/OVERSTEER_*/
+# STEER_SCRUB_COEFF/NO_DIFF_*) по |Δ газа/руля| между тиками - эти эффекты
+# удалены как заплатки. Теперь направление вектора скорости
+# (self.velocity_heading) догоняет курс (self.body.angle) с конечной
+# скоростью - на высокой скорости или при резком руле машина заметно "плывёт"
+# носом внутрь поворота (угол скольжения), как настоящий картинг, а не
+# мгновенно следует за курсом.
+# SLIP_ALIGN_GAIN - базовая скорость "прилипания" направления скорости к
+# курсу (1/с); SLIP_SPEED_FACTOR - насколько она падает с ростом скорости
+# (инерция: на высокой скорости машина дольше сохраняет прежнее направление).
+SLIP_ALIGN_GAIN = 7.0
+SLIP_SPEED_FACTOR = 0.012
 
 # --- Мощность и масса --------------------------------------------------
 # Разгон под тягой физически зависит от мощности двигателя и массы (F=ma,
@@ -104,16 +70,18 @@ STEER_SCRUB_COEFF = 0.03
 # трения и масса сокращаются) - поэтому масса ниже влияет только на разгон.
 #
 # ENGINE_POWER_HP/CAR_MASS выражены в узнаваемых единицах (л.с., кг) для
-# наглядности в UI-настройках, но, как и GRIP_ACCEL_PER_G выше, это не
-# независимая физическая калибровка (в проекте её нет и для длины/времени) -
-# просто дефолты подобраны так, чтобы РЕФЕРЕНСНЫЕ значения (REFERENCE_*)
-# воспроизводили прежнее ощущение разгона (ACCELERATION_RATE как было), а
-# дальше от них масштабирование линейное и физически осмысленное.
+# наглядности в UI-настройках, но, как и REFERENCE_MASS_KG/REFERENCE_POWER_HP
+# ниже, это не независимая физическая калибровка (в проекте её нет и для
+# длины/времени) - дефолты подобраны так, чтобы РЕФЕРЕНСНЫЕ значения давали
+# двигательный потолок ускорения (см. _desired_speed), РОВНО равный
+# GRIP_ACCEL - т.е. на референсных мощности/массе машина уже упирается в
+# сцепление шин, а не в мотор; ниже референса ограничивает мотор, выше -
+# всё равно сцепление (мощность мотора не может "перебить" сцепление шин).
 ENGINE_POWER_HP = 15.0      # типичный прокатный картинг (5-40 л.с. - разумный диапазон)
-REFERENCE_POWER_HP = 15.0   # мощность, при которой разгон == прежнему ACCELERATION_RATE
+REFERENCE_POWER_HP = 15.0
 
 CAR_MASS = 1.0              # масса в "игровых" единицах pymunk (для body/moment)
-REFERENCE_MASS = 1.0        # масса, при которой разгон == прежнему ACCELERATION_RATE
+REFERENCE_MASS = 1.0
 REFERENCE_MASS_KG = 160.0   # ~ картинг + пилот, для отображения CAR_MASS в кг в UI
 
 # "Утешительный приз" за пройденную дистанцию (см. add_distance_consolation_fitness)
@@ -196,7 +164,6 @@ class PhyCar(Car):
         self.space.add(body, shape)
 
         self.body = body
-        self.draw_speed_vectore = True
         # Кэш геометрии лучей-сенсоров (мировые координаты), заполняется в
         # get_inputs_for_network() - см. draw_sensors() ниже про то, зачем
         # рисовать по кэшу, а не сразу внутри get_inputs_for_network().
@@ -218,6 +185,13 @@ class PhyCar(Car):
         self.perpendicular_angle(self.screen.start_line)
         self.visible = visible
 
+        # --- Состояние новой модели руля/сноса (см. константы выше) --------
+        # steering_angle - текущий угол передних колёс (rad), плавно движется
+        # к цели из turn(); velocity_heading - направление вектора скорости,
+        # отстаёт от курса body.angle (угол скольжения, см. SLIP_ALIGN_*).
+        self.steering_angle = 0.0
+        self.velocity_heading = self.body.angle
+
         self.total_distance = 0.0  # Инициализация общего пройденного расстояния
         self.last_position = self.body.position  # Начальная позиция
 
@@ -232,12 +206,6 @@ class PhyCar(Car):
         self._has_pending_throttle = False
         self._has_pending_turn = False
 
-        # Значения газа/руля из ПРЕДЫДУЩЕГО тика, где они реально применялись
-        # - нужны, чтобы отличить "резко дёрнули" от "плавно держат" (снос/
-        # занос выше реагируют именно на скачок, а не на абсолютную величину).
-        self._prev_throttle_power = 0.0
-        self._prev_turn_power = 0.0
-
     def throttle(self, throttle_power):
         self._pending_throttle_power = throttle_power
         self._has_pending_throttle = True
@@ -248,10 +216,26 @@ class PhyCar(Car):
 
     def _desired_speed(self, throttle_power, current_speed):
         """Целевая скорость от одного лишь газа/тормоза, без учёта сцепления
-        с поворотом. Разгон под тягой масштабируется мощностью/массой этой
-        конкретной машины (F=ma, P~F*v); торможение - нет: тормозное
-        ускорение ограничено сцеплением шин с асфальтом, а не мотором, и не
-        зависит от массы (см. комментарий у ENGINE_POWER_HP/CAR_MASS)."""
+        с поворотом. Разгон под тягой ограничен ДВИГАТЕЛЬНЫМ потолком
+        ускорения (`max_accel`, масштабируется мощностью/массой этой
+        конкретной машины - см. комментарий у ENGINE_POWER_HP/CAR_MASS) - это
+        именно ПОТОЛОК на ускорение, а не скорость "подтягивания" к целевой
+        скорости, как было раньше (`effective_rate` - доля разницы до цели,
+        проходимая за тик): при большом разрыве до цели (например, старт с
+        места) старая модель подразумевала требуемое ускорение, пропорциональное
+        ВСЕЙ этой разнице - оно почти при любой настройке мощности улетало
+        далеко за GRIP_ACCEL и обрезалось кругом трения в _apply_controls ОДНИМ
+        и тем же значением независимо от мощности, то есть "Мощность (л.с.)"
+        на практике перестаёт на что-либо влиять уже начиная с ~5 л.с. при
+        референсных 15 (проверено эмпирически). Явный потолок ускорения этого
+        не допускает: ниже референсной мощности/массы ограничивает именно
+        двигатель (мощность реально влияет на разгон), выше - потолок
+        двигателя превышает GRIP_ACCEL и обрезает уже круг трения в
+        _apply_controls (как и должно быть - двигатель не может "перебить"
+        сцепление шин с асфальтом). Торможение - отдельно и НЕ зависит от
+        мощности: тормозное ускорение ограничено сцеплением шин с асфальтом,
+        а не мотором, и не зависит от массы (см. комментарий у
+        ENGINE_POWER_HP/CAR_MASS)."""
         if throttle_power == 0:
             return current_speed
         clamped = max(0, min(1, throttle_power))
@@ -259,94 +243,67 @@ class PhyCar(Car):
             target_speed = clamped * MAX_SPEED
             power_ratio = self.engine_power_hp / REFERENCE_POWER_HP
             mass_ratio = REFERENCE_MASS / self.mass
-            effective_rate = min(1.0, ACCELERATION_RATE * power_ratio * mass_ratio)
-            new_speed = current_speed + (target_speed - current_speed) * effective_rate
+            max_accel = GRIP_ACCEL * power_ratio * mass_ratio
+            new_speed = min(target_speed, current_speed + max_accel / TICK_RATE)
         else:
             new_speed = max(0.0, current_speed - BRAKE_RATE)
         return min(MAX_SPEED, new_speed)
 
-    def _desired_angular_velocity(self, turn_power, current_speed, current_angular):
-        """Целевая угловая скорость от одного лишь руля, без учёта сцепления
-        с газом - логика как в прежнем turn(), плюс штраф за отсутствие
-        дифференциала на малой скорости (см. NO_DIFF_*)."""
-        if current_speed < VELOCITY_EPSILON:
-            return current_angular
-
-        turn_effectiveness = max(0.05, 1 - SPEED_EFFECT * (current_speed / MAX_SPEED))
-        if current_speed < NO_DIFF_SPEED_THRESHOLD:
-            no_diff_factor = (NO_DIFF_MIN_EFFECTIVENESS
-                              + (1 - NO_DIFF_MIN_EFFECTIVENESS) * (current_speed / NO_DIFF_SPEED_THRESHOLD))
-            turn_effectiveness *= no_diff_factor
-
-        # Снос (understeer) - см. UNDERSTEER_* выше: чем резче скачок руля со
-        # прошлого тика, тем меньше эффективность поворота именно сейчас.
-        turn_power_delta = abs(turn_power - self._prev_turn_power)
-        understeer_factor = 1.0 - (1.0 - UNDERSTEER_MIN_EFFECTIVENESS) * min(
-            1.0, turn_power_delta / UNDERSTEER_RATE_THRESHOLD)
-        turn_effectiveness *= understeer_factor
-
-        if turn_power == 0:
-            return current_angular
-        angular_change = turn_power * ROTATE_POWER * turn_effectiveness
-        new_angular = current_angular + angular_change
-        return max(min(new_angular, ROTATE_POWER), -ROTATE_POWER)
-
     def _apply_controls(self):
+        dt = 1.0 / TICK_RATE
         current_speed = self.body.velocity.length
-        current_angular = self.body.angular_velocity
 
+        # 1) Руль: turn() задаёт ЦЕЛЬ руля, а сам угол поворачивается с конечной
+        # скоростью STEERING_RATE (руль нельзя дёрнуть мгновенно - раньше за
+        # это отвечал отдельный ручной "снос" UNDERSTEER_*).
+        if self._has_pending_turn:
+            steer_target = self._pending_turn_power * MAX_STEERING_ANGLE
+            max_step = STEERING_RATE * dt
+            delta = max(-max_step, min(max_step, steer_target - self.steering_angle))
+            self.steering_angle += delta
+
+        # 2) Продольное ускорение от газа/тормоза (лаг-модель двигателя, см.
+        # _desired_speed) - в px/s^2, за этот тик.
         desired_speed = (self._desired_speed(self._pending_throttle_power, current_speed)
                          if self._has_pending_throttle else current_speed)
-        desired_angular = (self._desired_angular_velocity(self._pending_turn_power, current_speed, current_angular)
-                           if self._has_pending_turn else current_angular)
-
-        # Требуемые этим тиком ускорения: продольное - из изменения скорости,
-        # поперечное (центростремительное) - из v*w при текущей скорости.
         lon_accel = (desired_speed - current_speed) * TICK_RATE
-        lat_accel = desired_angular * current_speed
 
+        # 3) Поперечное ускорение из руля: угловая скорость по кинематике
+        # велосипеда ω = v / WHEELBASE * tan(δ), боковое ускорение a = v·ω.
+        if current_speed > VELOCITY_EPSILON:
+            yaw_rate = current_speed / WHEELBASE * math.tan(self.steering_angle)
+        else:
+            yaw_rate = 0.0
+        lat_accel = current_speed * yaw_rate
+
+        # 4) Круг трения: сумма продольного и поперечного ускорения ограничена
+        # бюджетом GRIP_ACCEL - если сцепления не хватает на оба запроса разом,
+        # ужимаем ОБА пропорционально (круг, а не отдельные лимиты).
         combined = math.hypot(lon_accel, lat_accel)
         if combined > GRIP_ACCEL:
-            # Сцепления не хватает на оба запроса разом - ужимаем ОБА
-            # пропорционально общему бюджету (круг, а не отдельные лимиты)
-            # вместо того, чтобы полностью отдать приоритет одному из них.
             scale = GRIP_ACCEL / combined
             lon_accel *= scale
             lat_accel *= scale
-            desired_speed = current_speed + lon_accel / TICK_RATE
-            if current_speed > VELOCITY_EPSILON:
-                desired_angular = lat_accel / current_speed
 
-        # Скраб (см. STEER_SCRUB_COEFF выше) - применяется к уже РАЗРЕШЁННОМУ
-        # этим тиком повороту (desired_angular после круга трения), а не как
-        # отдельная заявка К кругу трения: скраб - это следствие использования
-        # поперечного сцепления, а не независимый запрос на него.
-        scrub = STEER_SCRUB_COEFF * abs(desired_angular) * current_speed / TICK_RATE
-        desired_speed = max(0.0, desired_speed - scrub)
+        # 5) Применяем: скорость v += a_lon·dt, рысканье ω = a_lat / v.
+        new_speed = max(0.0, min(MAX_SPEED, current_speed + lon_accel * dt))
+        if current_speed > VELOCITY_EPSILON:
+            new_angular = lat_accel / current_speed
+        else:
+            new_angular = 0.0
+        new_angular = max(min(new_angular, ROTATE_POWER), -ROTATE_POWER)
 
-        # Занос (oversteer, см. OVERSTEER_* выше) - резкий скачок газа, когда
-        # машина уже в повороте, добавляет лишнее вращение В ТУ ЖЕ СТОРОНУ.
-        # Специально НЕ участвует в круге трения выше (это потеря сцепления,
-        # а не манёвр в его пределах) - ограничен только общим потолком
-        # ROTATE_POWER сразу ниже.
-        if self._has_pending_throttle and abs(current_angular) > OVERSTEER_MIN_ANGULAR:
-            throttle_spike = self._pending_throttle_power - self._prev_throttle_power
-            if throttle_spike > OVERSTEER_THROTTLE_THRESHOLD:
-                kick = (OVERSTEER_STRENGTH * (throttle_spike - OVERSTEER_THROTTLE_THRESHOLD)
-                        * math.copysign(1.0, current_angular) * (current_speed / MAX_SPEED))
-                desired_angular += kick
+        # 6) Снос: направление скорости догоняет курс не мгновенно (см.
+        # SLIP_ALIGN_* выше). Чем выше скорость, тем медленнее прилипает -
+        # угол скольжения между velocity_heading и body.angle растёт в крутом
+        # повороте на скорости, и машина видимо "плывёт".
+        align_rate = SLIP_ALIGN_GAIN / (1.0 + current_speed * SLIP_SPEED_FACTOR)
+        heading_err = math.atan2(math.sin(self.body.angle - self.velocity_heading),
+                                 math.cos(self.body.angle - self.velocity_heading))
+        self.velocity_heading += heading_err * align_rate * dt
 
-        desired_speed = max(0.0, min(MAX_SPEED, desired_speed))
-        desired_angular = max(min(desired_angular, ROTATE_POWER), -ROTATE_POWER)
-
-        direction = pymunk.Vec2d(1, 0).rotated(self.body.angle)
-        self.body.velocity = direction.normalized() * desired_speed
-        self.body.angular_velocity = desired_angular
-
-        if self._has_pending_throttle:
-            self._prev_throttle_power = self._pending_throttle_power
-        if self._has_pending_turn:
-            self._prev_turn_power = self._pending_turn_power
+        self.body.velocity = pymunk.Vec2d(1, 0).rotated(self.velocity_heading) * new_speed
+        self.body.angular_velocity = new_angular
 
     def update(self):
         # Если ни throttle(), ни turn() не вызывались в этом тике (например,
@@ -398,13 +355,6 @@ class PhyCar(Car):
         rotated_image = pygame.transform.rotozoom(self.car_image, -math.degrees(self.body.angle), camera.zoom)
         screen_pos = camera.world_to_screen(self.body.position)
         self.car_rect = rotated_image.get_rect(center=screen_pos)
-        if self.draw_speed_vectore:
-            # Отрисовка вектора силы
-            if self.body.velocity.length > 0:
-                end_pos_velocity = self.body.position + self.body.velocity.normalized() * self.get_speed()
-                pygame.draw.line(self.screen.get_window(), (0, 0, 255), camera.world_to_screen(self.body.position),
-                                 camera.world_to_screen(end_pos_velocity), camera.scale_length(3))
-
         self.screen.get_window().blit(rotated_image, self.car_rect.topleft)
         # pygame.draw.rect(self.screen.get_window(), (255, 255, 255), self.collistion_rect)
 
@@ -556,12 +506,22 @@ class PhyCar(Car):
         forward-вектор машины = (cos(angle), sin(angle)), поэтому здесь не
         нужен минус перед sin, в отличие от direction_deg в draw_line)."""
         idx = self.next_checkpoint_index
+        n = len(self.screen.checkpoints_lines)
         target_x, target_y = self._gate_midpoint(idx)
-        if idx < len(self.screen.checkpoints_lines):
+        # Lookahead: смешиваем текущую цель со СЛЕДУЮЩЕЙ, чтобы сгладить курс.
+        # Для обычного чекпоинта следующая - чекпоинт idx+1 (для последнего -
+        # финиш, т.к. _gate_midpoint(n) возвращает start_line). Для САМОГО
+        # финиша (idx == n) следующая цель - ПЕРВЫЙ чекпоинт нового круга:
+        # иначе компас целился бы ТОЧНО в точку на линии старта, сигнал курса
+        # становился нестабильным прямо перед финишем, и сеть выучивала
+        # тормозить/зависать, а не проезжать финиш насквозь.
+        if idx < n:
             look_x, look_y = self._gate_midpoint(idx + 1)
-            w = CHECKPOINT_LOOKAHEAD_WEIGHT
-            target_x = target_x * w + look_x * (1 - w)
-            target_y = target_y * w + look_y * (1 - w)
+        else:
+            look_x, look_y = self._gate_midpoint(0)
+        w = CHECKPOINT_LOOKAHEAD_WEIGHT
+        target_x = target_x * w + look_x * (1 - w)
+        target_y = target_y * w + look_y * (1 - w)
         car_x, car_y = self.get_postion()
         target_angle = math.atan2(target_y - car_y, target_x - car_x)
         heading_error = target_angle - self.body.angle

@@ -167,16 +167,13 @@ def vehicle_params_from_physic_car():
     max_lateral_accel = physic_car.GRIP_ACCEL
     max_brake = min(physic_car.GRIP_ACCEL, physic_car.BRAKE_RATE * TICK_RATE)
 
-    # Разгон под тягой у PhyCar - экспоненциальный "подход" к целевой
-    # скорости (ACCELERATION_RATE), а не константное ускорение - берём его
-    # пиковое (при максимальном рассогласовании скоростей, т.е. с места)
-    # значение, масштабированное текущими мощностью/массой, и заодно
-    # ограничиваем тем же кругом сцепления - именно так ведёт себя реальная
+    # Разгон под тягой у PhyCar - явный двигательный потолок ускорения
+    # (масштабированный текущими мощностью/массой относительно референсных),
+    # ограниченный тем же кругом сцепления - именно так ведёт себя реальная
     # машина в PhyCar (см. _apply_controls/_desired_speed).
     power_ratio = physic_car.ENGINE_POWER_HP / physic_car.REFERENCE_POWER_HP
     mass_ratio = physic_car.REFERENCE_MASS / physic_car.CAR_MASS
-    peak_accel = max_speed * physic_car.ACCELERATION_RATE * TICK_RATE * power_ratio * mass_ratio
-    max_accel = min(peak_accel, physic_car.GRIP_ACCEL)
+    max_accel = min(physic_car.GRIP_ACCEL * power_ratio * mass_ratio, physic_car.GRIP_ACCEL)
 
     return {
         "max_speed": max_speed,

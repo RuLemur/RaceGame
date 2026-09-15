@@ -63,7 +63,11 @@ class GameEnvironment:
         if self.car.check_collision_with_start():
             self.car.add_fitness(5)
             if self.car.get_lap_time() > 0:
-                self.car.add_fitness(20 / self.car.get_lap_time())
+                # Бонус за скорость круга: чем быстрее круг (в секундах), тем
+                # больше. 60/время даёт ~3.0 за круг 20с, ~1.0 за 60с - чтобы
+                # скорость реально весила в фитнесе (раньше было 20/, что давало
+                # лишь ~0.3-1.0 и почти не отличало быструю езду от медленной).
+                self.car.add_fitness(60 / self.car.get_lap_time())
 
     def update(self):
         """decide() + resolve() одним вызовом - для одиночного использования

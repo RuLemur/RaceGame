@@ -1,0 +1,142 @@
+:root {
+  --bg: #0f1117;
+  --panel: #161a24;
+  --border: #232a3a;
+  --text: #e6e9f0;
+  --muted: #8b93a7;
+  --accent: #4f8cff;
+  --green: #3ecf8e;
+  --amber: #ffb457;
+  --red: #ef5d6c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  max-width: 1180px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 16px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+.brand h1 { display: inline; font-size: 20px; margin: 0; }
+.brand .sub { color: var(--muted); margin-left: 8px; font-size: 13px; }
+.status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.status.online .dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.gen-badge {
+  margin-left: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+.gen-badge b { color: var(--accent); font-size: 16px; }
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.kpi .k { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.kpi .v { font-size: 20px; font-weight: 600; }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.controls-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.controls-group.fields { gap: 10px; }
+.controls label { color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+.controls input {
+  background: #0c0e13;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  width: 84px;
+}
+.btn {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.active { background: var(--accent); color: #fff; }
+.btn.warn { border-color: var(--amber); }
+.btn.danger { border-color: var(--red); }
+
+.charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 260px;
+  position: relative;
+}
+.card.wide { grid-column: 1 / -1; }
+
+.card-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.genome-card canvas {
+  width: 100%;
+  height: 340px;
+  display: block;
+}
+
+.controls select {
+  background: #0c0e13;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.controls input[type="range"] {
+  width: 120px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.foot {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  gap: 16px;
+}
+.muted { color: var(--muted); }

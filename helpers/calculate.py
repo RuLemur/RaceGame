@@ -20,15 +20,26 @@ def get_midpoint(sl):
 
 def build_track_segments(track_outer, track_inner):
     """Собирает границы трассы в пару numpy-массивов (starts, ends) формы (N, 2)
-    для быстрого векторизованного пересечения лучей-сенсоров (см. cast_ray).
+    для быстрого векторизованного пересечения лучей-сенсоров (см. cast_ray) И
+    проверки столкновения со стенами (min_distance_to_segments).
+
+    ВАЖНО: контур ЗАМЫКАЕТСЯ - последняя точка соединяется с первой
+    (`(i + 1) % n`). Раньше диапазон был `range(len(line) - 1)`, т.е. сегмент
+    последняя->первая НЕ создавался: у трасс, где эти точки не совпадают
+    вплотную (например оцифрованные из реальных схем - у points_monza.txt
+    разрыв ~128px, у points.txt ~10px), в стене оставалась ДЫРА на стыке, и
+    машина вылетала за трассу именно через неё (столкновение там не
+    детектировалось - сегмента-то нет).
+
     Нужно пересчитывать заново каждый раз, когда меняются track_outer/track_inner
-    (например при переключении трассы) - см. Screen.reload_track."""
+    (например при переключении трассы) - см. Screen.load_track."""
     starts = []
     ends = []
     for line in (track_outer, track_inner):
-        for i in range(len(line) - 1):
+        n = len(line)
+        for i in range(n):
             starts.append(line[i])
-            ends.append(line[i + 1])
+            ends.append(line[(i + 1) % n])
     return np.asarray(starts, dtype=float), np.asarray(ends, dtype=float)
 
 

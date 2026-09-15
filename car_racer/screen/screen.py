@@ -173,7 +173,7 @@ class Screen:
         # логический холст в окно, эта - решает, какой кусок МИРА рисуется НА
         # холсте. При zoom=1 и центре по умолчанию преобразование тождественно
         # (воспроизводит поведение без камеры).
-        self.camera = Camera(self.screen_width, self.screen_height)
+        self.camera = Camera(self.logical_width, self.logical_height)
 
         self.track_file = track_file
         self.track_outer, self.track_inner, self.checkpoints_lines, self.start_line = parse_track(track_file)
@@ -316,11 +316,11 @@ class Screen:
     def compute_fit_zoom(self, fill_fraction=0.92):
         """Зум, при котором ВСЯ трасса (bounding box track_outer+track_inner,
         см. _recompute_world_bounds) целиком помещается в игровое поле
-        (screen_width x screen_height - именно то, что видит Camera, панель
-        справа сюда не входит) - используется, чтобы при открытии окна/смене
-        трассы карта сразу заполняла собой доступное пространство, а не
-        показывала маленький кусок при zoom=1 (было особенно заметно на
-        крупных трассах после перехода на PX_PER_METER, см. CLAUDE.md).
+        (logical_width x logical_height - весь холст, т.к. игра теперь
+        занимает всё окно, а кнопки плавают поверх) - используется, чтобы при
+        открытии окна/смене трассы карта сразу заполняла собой доступное
+        пространство, а не показывала маленький кусок при zoom=1 (было особенно
+        заметно на крупных трассах после перехода на PX_PER_METER, см. CLAUDE.md).
 
         `fill_fraction` - доля игрового поля, которую должен занимать bbox
         трассы (не 1.0 - небольшой отступ по краям, чтобы трасса не
@@ -330,7 +330,7 @@ class Screen:
         bbox_w, bbox_h = self._track_bbox_size
         if bbox_w <= 0 or bbox_h <= 0:
             return 1.0
-        zoom = min(self.screen_width / bbox_w, self.screen_height / bbox_h) * fill_fraction
+        zoom = min(self.logical_width / bbox_w, self.logical_height / bbox_h) * fill_fraction
         return max(MIN_ZOOM, min(MAX_ZOOM, zoom))
 
     def _load_ideal_line(self):
@@ -403,8 +403,9 @@ class Screen:
 
     def _build_grass_texture(self):
         """Строит и кэширует (см. self._grass_texture) слегка "мятую" зелёную
-        текстуру фона размером с игровое поле (self.screen_width x
-        self.screen_height) - вызывается один раз лениво из draw_track(),
+        текстуру фона размером со ВЕСЬ логический холст (self.logical_width x
+        self.logical_height, т.е. игровое поле + колонка справа с плавающими
+        кнопками) - вызывается один раз лениво из draw_track(),
         а не в __init__ (не задерживает конструктор Screen без явной нужды)
         и не каждый кадр (см. GRASS_NOISE_SCALE выше про то, почему это
         важно для перформанса на крупных трассах).
@@ -415,7 +416,7 @@ class Screen:
         визуально то же самое "мятое" ощущение, но генерируется заметно
         дольше; блочный шум с последующим сглаживанием дешевле и всё равно
         убирает эффект плоской чёрной/однотонной заливки."""
-        w, h = self.screen_width, self.screen_height
+        w, h = self.logical_width, self.logical_height
         small_w = max(1, w // GRASS_NOISE_SCALE)
         small_h = max(1, h // GRASS_NOISE_SCALE)
 
@@ -553,7 +554,7 @@ class Screen:
         tex_w, tex_h = texture.get_size()
 
         world_top_left = cam.screen_to_world((0, 0))
-        world_bottom_right = cam.screen_to_world((self.screen_width, self.screen_height))
+        world_bottom_right = cam.screen_to_world((self.logical_width, self.logical_height))
         tex_x0 = (world_top_left[0] - origin_x) * cache_scale
         tex_y0 = (world_top_left[1] - origin_y) * cache_scale
         tex_x1 = (world_bottom_right[0] - origin_x) * cache_scale
